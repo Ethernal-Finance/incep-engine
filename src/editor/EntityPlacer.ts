@@ -1,151 +1,77 @@
-import { Editor, EditorTool } from './Editor';
+import { Level, LevelEntity } from '../data/Level';
 import { Renderer } from '../engine/Renderer';
 import { Input } from '../engine/Input';
+import { Camera } from '../systems/CameraSystem';
 import { Vector2 } from '../utils/Vector2';
-import { EntityManager } from '../entities/EntityManager';
-import { Entity } from '../entities/Entity';
-import { Transform } from '../components/Transform';
-import { Sprite } from '../components/Sprite';
+import { AssetLoader } from '../engine/AssetLoader';
 
 export class EntityPlacer {
-  private editor: Editor;
-  private entityManager: EntityManager;
-  private selectedEntity: Entity | null = null;
-  private isDragging: boolean = false;
-  private dragOffset: Vector2 = Vector2.zero();
+  private selectedEntityType: string = 'player';
+  private placing: boolean = false;
+  private selectedEntity: LevelEntity | null = null;
 
-  constructor(editor: Editor) {
-    this.editor = editor;
-    this.entityManager = new EntityManager();
+  constructor(private level: Level) {}
+
+  setSelectedEntityType(type: string): void {
+    this.selectedEntityType = type;
   }
 
-  update(deltaTime: number): void {
-    if (this.editor.getTool() !== EditorTool.Entity) return;
+  getSelectedEntityType(): string {
+    return this.selectedEntityType;
+  }
 
-    const renderer = this.editor.getRenderer();
-    const mousePos = Input.getMousePosition();
-    const worldPos = renderer.screenToWorld(mousePos);
+  update(deltaTime: number, mousePos: Vector2, camera: Camera, zoom: number, viewportWidth: number, viewportHeight: number): void {
+    const worldPos = camera.screenToWorld(mousePos, viewportWidth, viewportHeight);
 
-    // Handle entity selection
     if (Input.getMouseButtonDown(0)) {
-      const clickedEntity = this.getEntityAtPosition(worldPos);
+      // Check if clicking on existing entity
+      const clickedEntity = this.findEntityAt(worldPos);
       if (clickedEntity) {
-        this.setSelectedEntity(clickedEntity);
-        const transform = clickedEntity.getComponent(Transform);
-        if (transform) {
-          this.dragOffset = worldPos.subtract(transform.position);
-          this.isDragging = true;
-        }
+        this.selectedEntity = clickedEntity;
       } else {
-        this.setSelectedEntity(null);
+        // Place new entity
+        const newEntity: LevelEntity = {
+          type: this.selectedEntityType,
+          id: `entity_${Date.now()}`,
+          x: worldPos.x,
+          y: worldPos.y
+        };
+        this.level.addEntity(newEntity);
+        this.selectedEntity = newEntity;
       }
     }
 
-    // Handle entity dragging
-    if (this.isDragging && this.selectedEntity) {
-      const transform = this.selectedEntity.getComponent(Transform);
-      if (transform) {
-        transform.position = worldPos.subtract(this.dragOffset);
-      }
-    }
-
-    if (Input.getMouseButtonUp(0)) {
-      this.isDragging = false;
-    }
-
-    // Handle entity deletion
-    if (this.selectedEntity && Input.getKeyDown('Delete')) {
-      this.entityManager.remove(this.selectedEntity.id);
-      this.setSelectedEntity(null);
+    if (Input.getKeyDown('Delete') && this.selectedEntity) {
+      this.level.removeEntity(this.selectedEntity.id);
+      this.selectedEntity = null;
     }
   }
 
-  private getEntityAtPosition(position: Vector2): Entity | null {
-    const entities = this.entityManager.getAll();
-    
-    for (const entity of entities) {
-      const transform = entity.getComponent(Transform);
-      const sprite = entity.getComponent(Sprite);
-      
-      if (!transform || !sprite) continue;
-
-      const distance = transform.position.distance(position);
-      const radius = Math.max(sprite.width, sprite.height) / 2;
-      
-      if (distance <= radius) {
+  private findEntityAt(pos: Vector2): LevelEntity | null {
+    for (const entity of this.level.entities) {
+      const distance = Vector2.distance(new Vector2(entity.x, entity.y), pos);
+      if (distance < 16) {
         return entity;
       }
     }
-
     return null;
   }
 
-  createEntity(type: string, x: number, y: number): Entity {
-    const entity = this.entityManager.create(type);
-    const transform = entity.addComponent(new Transform(x, y));
-    const sprite = entity.addComponent(new Sprite());
-    sprite.width = 32;
-    sprite.height = 32;
-    sprite.offsetX = -16;
-    sprite.offsetY = -16;
-    
-    return entity;
-  }
-
   render(renderer: Renderer): void {
-    // Render all entities
-    const entities = this.entityManager.getAll();
-    for (const entity of entities) {
-      const transform = entity.getComponent(Transform);
-      const sprite = entity.getComponent(Sprite);
-      
-      if (!transform || !sprite) continue;
+    for (const entity of this.level.entities) {
+      // Render entity placeholder
+      renderer.fillRect(entity.x - 8, entity.y - 8, 16, 16, '#00ff00');
+      renderer.strokeRect(entity.x - 8, entity.y - 8, 16, 16, '#ffffff', 1);
 
-      const screenPos = renderer.worldToScreen(transform.position);
-      
-      // Draw entity bounds
-      renderer.strokeRect(
-        screenPos.x + sprite.offsetX * renderer.getCameraZoom(),
-        screenPos.y + sprite.offsetY * renderer.getCameraZoom(),
-        sprite.width * renderer.getCameraZoom(),
-        sprite.height * renderer.getCameraZoom(),
-        entity === this.selectedEntity ? '#00ff00' : '#00aaff',
-        2
-      );
-
-      // Draw sprite if available
-      if (sprite.image) {
-        renderer.drawImage(
-          sprite.image,
-          screenPos.x + sprite.offsetX * renderer.getCameraZoom(),
-          screenPos.y + sprite.offsetY * renderer.getCameraZoom(),
-          sprite.width * renderer.getCameraZoom(),
-          sprite.height * renderer.getCameraZoom()
-        );
-      } else {
-        // Draw placeholder
-        renderer.fillRect(
-          screenPos.x + sprite.offsetX * renderer.getCameraZoom(),
-          screenPos.y + sprite.offsetY * renderer.getCameraZoom(),
-          sprite.width * renderer.getCameraZoom(),
-          sprite.height * renderer.getCameraZoom(),
-          '#6666ff'
-        );
+      // Highlight selected entity
+      if (this.selectedEntity && this.selectedEntity.id === entity.id) {
+        renderer.strokeRect(entity.x - 12, entity.y - 12, 24, 24, '#ffff00', 2);
       }
     }
   }
 
-  getEntityManager(): EntityManager {
-    return this.entityManager;
-  }
-
-  getSelectedEntity(): Entity | null {
+  getSelectedEntity(): LevelEntity | null {
     return this.selectedEntity;
-  }
-
-  setSelectedEntity(entity: Entity | null): void {
-    this.selectedEntity = entity;
-    this.editor.getPropertyInspector()?.setSelectedEntity(entity);
   }
 }
 

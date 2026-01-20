@@ -9,7 +9,7 @@ export abstract class Scene {
     return this.name;
   }
 
-  abstract init(): void | Promise<void>;
+  abstract init(): void;
   abstract update(deltaTime: number): void;
   abstract render(renderer: any): void;
   abstract destroy(): void;

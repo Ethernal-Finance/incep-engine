@@ -3,8 +3,8 @@ export class MathUtils {
     return Math.min(Math.max(value, min), max);
   }
 
-  static lerp(start: number, end: number, t: number): number {
-    return start + (end - start) * t;
+  static lerp(a: number, b: number, t: number): number {
+    return a + (b - a) * t;
   }
 
   static smoothstep(edge0: number, edge1: number, x: number): number {
@@ -13,39 +13,15 @@ export class MathUtils {
   }
 
   static degToRad(degrees: number): number {
-    return degrees * (Math.PI / 180);
+    return (degrees * Math.PI) / 180;
   }
 
   static radToDeg(radians: number): number {
-    return radians * (180 / Math.PI);
+    return (radians * 180) / Math.PI;
   }
 
-  static sign(value: number): number {
-    return value < 0 ? -1 : value > 0 ? 1 : 0;
-  }
-
-  static floor(value: number): number {
-    return Math.floor(value);
-  }
-
-  static ceil(value: number): number {
-    return Math.ceil(value);
-  }
-
-  static round(value: number): number {
-    return Math.round(value);
-  }
-
-  static abs(value: number): number {
-    return Math.abs(value);
-  }
-
-  static min(a: number, b: number): number {
-    return Math.min(a, b);
-  }
-
-  static max(a: number, b: number): number {
-    return Math.max(a, b);
+  static snapToGrid(value: number, gridSize: number): number {
+    return Math.round(value / gridSize) * gridSize;
   }
 
   static random(min: number, max: number): number {

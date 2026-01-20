@@ -1,25 +1,44 @@
 import { Game } from './engine/Game';
-import { GameScene } from './scenes/GameScene';
+import { Scene } from './engine/Scene';
+import { Renderer } from './engine/Renderer';
 
-const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
-if (!canvas) {
-  throw new Error('Canvas element not found');
+class GameScene extends Scene {
+  private renderer: Renderer;
+
+  constructor() {
+    super('GameScene');
+  }
+
+  init(): void {
+    // Initialize game scene
+  }
+
+  update(deltaTime: number): void {
+    // Update game logic
+  }
+
+  render(renderer: Renderer): void {
+    this.renderer = renderer;
+    // Render game
+    renderer.fillText('Game Scene', 100, 100, '#ffffff');
+  }
+
+  destroy(): void {
+    // Cleanup
+  }
 }
+
+// Initialize game
+const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
+if (!canvas) {
+  throw new Error('Canvas not found');
+}
+
+canvas.width = 800;
+canvas.height = 600;
 
 const game = new Game(canvas);
 const scene = new GameScene();
-
-// Set up regenerate button
-const regenerateButton = document.getElementById('regenerateButton') as HTMLButtonElement;
-if (regenerateButton) {
-  regenerateButton.addEventListener('click', async () => {
-    // Get renderer from game to pass screen dimensions
-    const renderer = game.getRenderer();
-    await scene.regenerateWorld(renderer);
-  });
-}
-
-game.setScene(scene).then(() => {
-  game.start();
-});
+game.setScene(scene);
+game.start();
 

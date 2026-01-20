@@ -2,50 +2,42 @@ import { Vector2 } from '../utils/Vector2';
 
 export class Input {
   private static keys: Map<string, boolean> = new Map();
-  private static keysPressed: Map<string, boolean> = new Map();
-  private static keysReleased: Map<string, boolean> = new Map();
-  private static mousePosition: Vector2 = Vector2.zero();
+  private static keysDown: Map<string, boolean> = new Map();
+  private static keysUp: Map<string, boolean> = new Map();
+  private static mousePosition: Vector2 = new Vector2();
   private static mouseButtons: Map<number, boolean> = new Map();
-  private static mouseButtonsPressed: Map<number, boolean> = new Map();
-  private static mouseButtonsReleased: Map<number, boolean> = new Map();
-  private static mouseWheelDelta: number = 0;
+  private static mouseButtonsDown: Map<number, boolean> = new Map();
+  private static mouseButtonsUp: Map<number, boolean> = new Map();
 
   static init(canvas: HTMLCanvasElement): void {
     window.addEventListener('keydown', (e) => {
-      if (!Input.keys.get(e.code)) {
-        Input.keysPressed.set(e.code, true);
+      if (!Input.keys.get(e.key)) {
+        Input.keysDown.set(e.key, true);
       }
-      Input.keys.set(e.code, true);
+      Input.keys.set(e.key, true);
     });
 
     window.addEventListener('keyup', (e) => {
-      Input.keysReleased.set(e.code, true);
-      Input.keys.set(e.code, false);
+      Input.keysUp.set(e.key, true);
+      Input.keys.set(e.key, false);
     });
 
     canvas.addEventListener('mousemove', (e) => {
       const rect = canvas.getBoundingClientRect();
-      Input.mousePosition = new Vector2(
-        e.clientX - rect.left,
-        e.clientY - rect.top
-      );
+      Input.mousePosition.x = e.clientX - rect.left;
+      Input.mousePosition.y = e.clientY - rect.top;
     });
 
     canvas.addEventListener('mousedown', (e) => {
       if (!Input.mouseButtons.get(e.button)) {
-        Input.mouseButtonsPressed.set(e.button, true);
+        Input.mouseButtonsDown.set(e.button, true);
       }
       Input.mouseButtons.set(e.button, true);
     });
 
     canvas.addEventListener('mouseup', (e) => {
-      Input.mouseButtonsReleased.set(e.button, true);
+      Input.mouseButtonsUp.set(e.button, true);
       Input.mouseButtons.set(e.button, false);
-    });
-
-    canvas.addEventListener('wheel', (e) => {
-      Input.mouseWheelDelta = e.deltaY;
-      e.preventDefault();
     });
 
     canvas.addEventListener('contextmenu', (e) => {
@@ -54,28 +46,26 @@ export class Input {
   }
 
   static update(): void {
-    // Clear one-frame states
-    Input.keysPressed.clear();
-    Input.keysReleased.clear();
-    Input.mouseButtonsPressed.clear();
-    Input.mouseButtonsReleased.clear();
-    Input.mouseWheelDelta = 0;
+    Input.keysDown.clear();
+    Input.keysUp.clear();
+    Input.mouseButtonsDown.clear();
+    Input.mouseButtonsUp.clear();
   }
 
-  static getKey(keyCode: string): boolean {
-    return Input.keys.get(keyCode) || false;
+  static getKey(key: string): boolean {
+    return Input.keys.get(key) || false;
   }
 
-  static getKeyDown(keyCode: string): boolean {
-    return Input.keysPressed.get(keyCode) || false;
+  static getKeyDown(key: string): boolean {
+    return Input.keysDown.get(key) || false;
   }
 
-  static getKeyUp(keyCode: string): boolean {
-    return Input.keysReleased.get(keyCode) || false;
+  static getKeyUp(key: string): boolean {
+    return Input.keysUp.get(key) || false;
   }
 
   static getMousePosition(): Vector2 {
-    return Input.mousePosition.clone();
+    return Input.mousePosition.copy();
   }
 
   static getMouseButton(button: number): boolean {
@@ -83,41 +73,11 @@ export class Input {
   }
 
   static getMouseButtonDown(button: number): boolean {
-    return Input.mouseButtonsPressed.get(button) || false;
+    return Input.mouseButtonsDown.get(button) || false;
   }
 
   static getMouseButtonUp(button: number): boolean {
-    return Input.mouseButtonsReleased.get(button) || false;
-  }
-
-  static getMouseWheelDelta(): number {
-    return Input.mouseWheelDelta;
-  }
-
-  // Convenience methods for common keys
-  static getArrowUp(): boolean {
-    return Input.getKey('ArrowUp');
-  }
-
-  static getArrowDown(): boolean {
-    return Input.getKey('ArrowDown');
-  }
-
-  static getArrowLeft(): boolean {
-    return Input.getKey('ArrowLeft');
-  }
-
-  static getArrowRight(): boolean {
-    return Input.getKey('ArrowRight');
-  }
-
-  static getWASD(): { w: boolean; a: boolean; s: boolean; d: boolean } {
-    return {
-      w: Input.getKey('KeyW'),
-      a: Input.getKey('KeyA'),
-      s: Input.getKey('KeyS'),
-      d: Input.getKey('KeyD')
-    };
+    return Input.mouseButtonsUp.get(button) || false;
   }
 }
 

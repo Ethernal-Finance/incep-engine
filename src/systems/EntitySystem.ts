@@ -1,138 +1,77 @@
-import { EntityManager } from '../entities/EntityManager';
-import { Entity } from '../entities/Entity';
-import { Sprite } from '../components/Sprite';
 import { Transform } from '../components/Transform';
-import { Renderer } from '../engine/Renderer';
-import { Vector2 } from '../utils/Vector2';
+import { Sprite } from '../components/Sprite';
+import { Collider } from '../components/Collider';
+import { Movement } from '../components/Movement';
+import { Health } from '../components/Health';
+import { Inventory } from '../components/Inventory';
+import { Dialogue } from '../components/Dialogue';
+
+export type Component = Transform | Sprite | Collider | Movement | Health | Inventory | Dialogue;
+
+export class Entity {
+  public id: string;
+  public name: string;
+  public components: Map<string, Component>;
+  public active: boolean;
+
+  constructor(id: string, name: string = 'Entity') {
+    this.id = id;
+    this.name = name;
+    this.components = new Map();
+    this.active = true;
+  }
+
+  addComponent<T extends Component>(type: string, component: T): T {
+    this.components.set(type, component);
+    return component;
+  }
+
+  getComponent<T extends Component>(type: string): T | null {
+    return (this.components.get(type) as T) || null;
+  }
+
+  hasComponent(type: string): boolean {
+    return this.components.has(type);
+  }
+
+  removeComponent(type: string): void {
+    this.components.delete(type);
+  }
+}
 
 export class EntitySystem {
-  private entityManager: EntityManager;
+  private entities: Map<string, Entity>;
+  private nextId: number = 0;
 
-  constructor(entityManager: EntityManager) {
-    this.entityManager = entityManager;
+  constructor() {
+    this.entities = new Map();
+  }
+
+  createEntity(name: string = 'Entity'): Entity {
+    const id = `entity_${this.nextId++}`;
+    const entity = new Entity(id, name);
+    this.entities.set(id, entity);
+    return entity;
+  }
+
+  removeEntity(id: string): void {
+    this.entities.delete(id);
+  }
+
+  getEntity(id: string): Entity | null {
+    return this.entities.get(id) || null;
+  }
+
+  getAllEntities(): Entity[] {
+    return Array.from(this.entities.values()).filter((e) => e.active);
+  }
+
+  getEntitiesWithComponent(componentType: string): Entity[] {
+    return this.getAllEntities().filter((e) => e.hasComponent(componentType));
   }
 
   update(deltaTime: number): void {
-    // Update sprite animations
-    const entitiesWithSprites = this.entityManager.getEntitiesWithComponent(Sprite);
-    for (const entity of entitiesWithSprites) {
-      const sprite = entity.getComponent(Sprite)!;
-      if (sprite.enabled) {
-        sprite.updateAnimation(deltaTime);
-      }
-    }
-  }
-
-  render(renderer: Renderer): void {
-    const entities = this.entityManager.getAll();
-    
-    // Sort by y position for proper z-ordering
-    const sortedEntities = entities
-      .filter(e => e.enabled)
-      .filter(e => e.hasComponent(Sprite) && e.hasComponent(Transform))
-      .sort((a, b) => {
-        const transformA = a.getComponent(Transform)!;
-        const transformB = b.getComponent(Transform)!;
-        return transformA.position.y - transformB.position.y;
-      });
-
-    for (const entity of sortedEntities) {
-      const sprite = entity.getComponent(Sprite);
-      const transform = entity.getComponent(Transform);
-      
-      if (!sprite || !transform || !sprite.enabled) continue;
-
-      const screenPos = renderer.worldToScreen(transform.position);
-      const zoom = renderer.getCameraZoom();
-
-      renderer.save();
-      renderer.getContext().globalAlpha = sprite.opacity;
-
-      // Handle flip
-      if (sprite.flipX || sprite.flipY) {
-        renderer.translate(screenPos.x, screenPos.y);
-        renderer.scale(sprite.flipX ? -1 : 1, sprite.flipY ? -1 : 1);
-        renderer.translate(-screenPos.x, -screenPos.y);
-      }
-
-      // Get current animation frame or use full image
-      const frame = sprite.getCurrentFrame();
-      
-      if (sprite.image) {
-        if (frame) {
-          // Draw from animation frame
-          renderer.drawImage(
-            sprite.image,
-            screenPos.x + sprite.offsetX * zoom,
-            screenPos.y + sprite.offsetY * zoom,
-            (frame.width || sprite.width) * zoom,
-            (frame.height || sprite.height) * zoom,
-            frame.x,
-            frame.y,
-            frame.width,
-            frame.height
-          );
-        } else {
-          // Draw full image
-          renderer.drawImage(
-            sprite.image,
-            screenPos.x + sprite.offsetX * zoom,
-            screenPos.y + sprite.offsetY * zoom,
-            sprite.width * zoom,
-            sprite.height * zoom
-          );
-        }
-
-        // Apply tint if set
-        if (sprite.tint) {
-          renderer.save();
-          renderer.getContext().globalCompositeOperation = 'multiply';
-          renderer.fillRect(
-            screenPos.x + sprite.offsetX * zoom,
-            screenPos.y + sprite.offsetY * zoom,
-            sprite.width * zoom,
-            sprite.height * zoom,
-            sprite.tint
-          );
-          renderer.restore();
-        }
-      } else {
-        // Draw placeholder rectangle if no image
-        const color = sprite.tint || this.getEntityColor(entity);
-        renderer.fillRect(
-          screenPos.x + sprite.offsetX * zoom,
-          screenPos.y + sprite.offsetY * zoom,
-          sprite.width * zoom,
-          sprite.height * zoom,
-          color
-        );
-        // Draw border
-        renderer.strokeRect(
-          screenPos.x + sprite.offsetX * zoom,
-          screenPos.y + sprite.offsetY * zoom,
-          sprite.width * zoom,
-          sprite.height * zoom,
-          '#ffffff',
-          1
-        );
-      }
-
-      renderer.restore();
-    }
-  }
-
-  getEntityManager(): EntityManager {
-    return this.entityManager;
-  }
-
-  private getEntityColor(entity: Entity): string {
-    // Return different colors based on entity type/name
-    const name = entity.name.toLowerCase();
-    if (name.includes('player')) return '#00aaff';
-    if (name.includes('npc')) return '#00ff00';
-    if (name.includes('enemy')) return '#ff0000';
-    if (name.includes('item')) return '#ffff00';
-    return '#6666ff'; // Default color
+    // Systems will update entities
   }
 }
 

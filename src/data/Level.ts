@@ -1,101 +1,48 @@
-import { Tilemap, TilemapLayer, Tileset } from './Tilemap';
+import { Tilemap } from './Tilemap';
 
-export interface EntityData {
+export interface LevelEntity {
   type: string;
+  id: string;
   x: number;
   y: number;
-  [key: string]: any;
-}
-
-export interface LevelData {
-  version: string;
-  name: string;
-  tilemap: {
-    width: number;
-    height: number;
-    tileSize: number;
-    layers: TilemapLayer[];
-    collisionLayer: number[];
-    tileset?: {
-      name: string;
-      imagePath: string;
-      tileWidth: number;
-      tileHeight: number;
-      tileCount: number;
-      columns: number;
-    };
-  };
-  entities: EntityData[];
+  properties?: Record<string, any>;
 }
 
 export class Level {
+  public version: string;
   public name: string;
   public tilemap: Tilemap;
-  public entities: EntityData[] = [];
+  public entities: LevelEntity[];
 
-  constructor(name: string, tilemap: Tilemap) {
+  constructor(name: string = 'Level 1', version: string = '1.0') {
+    this.version = version;
     this.name = name;
-    this.tilemap = tilemap;
+    this.tilemap = new Tilemap(50, 50, 32);
+    this.entities = [];
   }
 
-  static fromJSON(data: LevelData): Level {
-    const tilemap = new Tilemap(
-      data.tilemap.width,
-      data.tilemap.height,
-      data.tilemap.tileSize
-    );
-
-    // Restore layers
-    data.tilemap.layers.forEach(layerData => {
-      tilemap.addLayer(layerData.name, layerData.data);
-      const layer = tilemap.getLayer(layerData.name);
-      if (layer) {
-        layer.visible = layerData.visible;
-        layer.opacity = layerData.opacity;
-      }
-    });
-
-    // Restore collision layer
-    tilemap.collisionLayer = data.tilemap.collisionLayer || [];
-
-    // Restore tileset
-    if (data.tilemap.tileset) {
-      tilemap.tileset = {
-        name: data.tilemap.tileset.name,
-        imagePath: data.tilemap.tileset.imagePath,
-        tileWidth: data.tilemap.tileset.tileWidth,
-        tileHeight: data.tilemap.tileset.tileHeight,
-        tileCount: data.tilemap.tileset.tileCount,
-        columns: data.tilemap.tileset.columns
-      } as Tileset;
-    }
-
-    const level = new Level(data.name, tilemap);
-    level.entities = data.entities || [];
-    return level;
+  addEntity(entity: LevelEntity): void {
+    this.entities.push(entity);
   }
 
-  toJSON(): LevelData {
+  removeEntity(id: string): void {
+    this.entities = this.entities.filter((e) => e.id !== id);
+  }
+
+  toJSON(): any {
     return {
-      version: '1.0',
+      version: this.version,
       name: this.name,
-      tilemap: {
-        width: this.tilemap.width,
-        height: this.tilemap.height,
-        tileSize: this.tilemap.tileSize,
-        layers: this.tilemap.layers,
-        collisionLayer: this.tilemap.collisionLayer,
-        tileset: this.tilemap.tileset ? {
-          name: this.tilemap.tileset.name,
-          imagePath: this.tilemap.tileset.imagePath,
-          tileWidth: this.tilemap.tileset.tileWidth,
-          tileHeight: this.tilemap.tileset.tileHeight,
-          tileCount: this.tilemap.tileset.tileCount,
-          columns: this.tilemap.tileset.columns
-        } : undefined
-      },
+      tilemap: this.tilemap.toJSON(),
       entities: this.entities
     };
+  }
+
+  static fromJSON(data: any): Level {
+    const level = new Level(data.name, data.version);
+    level.tilemap = Tilemap.fromJSON(data.tilemap);
+    level.entities = data.entities || [];
+    return level;
   }
 }
 

@@ -1,25 +1,20 @@
-import { Editor, EditorTool } from './Editor';
-import { Renderer } from '../engine/Renderer';
 import { Tilemap } from '../data/Tilemap';
+import { Renderer } from '../engine/Renderer';
 import { Input } from '../engine/Input';
+import { Camera } from '../systems/CameraSystem';
 import { Vector2 } from '../utils/Vector2';
-import { TilemapRenderer } from '../systems/TilemapRenderer';
+import { AssetLoader } from '../engine/AssetLoader';
+import { MathUtils } from '../utils/Math';
 
 export class TilemapEditor {
-  private editor: Editor;
-  private tilemap: Tilemap | null = null;
   private selectedTile: number = 1;
-  private currentLayer: string = 'background';
-  private isPainting: boolean = false;
+  private painting: boolean = false;
+  private erasing: boolean = false;
 
-  constructor(editor: Editor) {
-    this.editor = editor;
-  }
-
-  setTilemap(tilemap: Tilemap): void {
-    this.tilemap = tilemap;
-    if (tilemap.layers.length > 0) {
-      this.currentLayer = tilemap.layers[0].name;
+  constructor(private tilemap: Tilemap) {
+    // Ensure we have at least a background layer
+    if (this.tilemap.layers.length === 0) {
+      this.tilemap.addLayer('background');
     }
   }
 
@@ -27,92 +22,68 @@ export class TilemapEditor {
     this.selectedTile = tileId;
   }
 
-  setCurrentLayer(layerName: string): void {
-    this.currentLayer = layerName;
+  getSelectedTile(): number {
+    return this.selectedTile;
   }
 
-  update(deltaTime: number): void {
-    if (!this.tilemap) return;
-    if (this.editor.getTool() !== EditorTool.Paint && this.editor.getTool() !== EditorTool.Erase) return;
+  update(deltaTime: number, mousePos: Vector2, camera: Camera, zoom: number, viewportWidth: number, viewportHeight: number): void {
+    // Convert screen to world coordinates
+    const worldPos = camera.screenToWorld(mousePos, viewportWidth, viewportHeight);
 
-    const renderer = this.editor.getRenderer();
-    const mousePos = Input.getMousePosition();
-    const worldPos = renderer.screenToWorld(mousePos);
-    const tile = this.tilemap.worldToTile(worldPos.x, worldPos.y);
+    // Snap to grid
+    const tileX = Math.floor(worldPos.x / this.tilemap.tileSize);
+    const tileY = Math.floor(worldPos.y / this.tilemap.tileSize);
+
+    const activeLayer = this.tilemap.layers[0]; // TODO: get active layer
 
     if (Input.getMouseButton(0)) {
-      if (!this.isPainting) {
-        this.isPainting = true;
-        this.paintTile(tile.x, tile.y);
-      } else {
-        // Continuous painting
-        this.paintTile(tile.x, tile.y);
+      // Left click - paint
+      if (activeLayer) {
+        this.tilemap.setTile(activeLayer.name, tileX, tileY, this.selectedTile);
       }
-    } else {
-      this.isPainting = false;
-    }
-
-    // Handle collision layer editing
-    if (this.editor.getTool() === EditorTool.Collision) {
-      if (Input.getMouseButton(0)) {
-        this.tilemap.setCollisionAt(tile.x, tile.y, true);
-      } else if (Input.getMouseButton(2)) {
-        this.tilemap.setCollisionAt(tile.x, tile.y, false);
+    } else if (Input.getMouseButton(2)) {
+      // Right click - erase
+      if (activeLayer) {
+        this.tilemap.setTile(activeLayer.name, tileX, tileY, 0);
       }
-    }
-  }
-
-  private paintTile(x: number, y: number): void {
-    if (!this.tilemap) return;
-
-    if (this.editor.getTool() === EditorTool.Paint) {
-      this.tilemap.setTileAt(this.currentLayer, x, y, this.selectedTile);
-    } else if (this.editor.getTool() === EditorTool.Erase) {
-      this.tilemap.setTileAt(this.currentLayer, x, y, 0);
     }
   }
 
   render(renderer: Renderer): void {
-    if (!this.tilemap) return;
+    const tilesetImage = AssetLoader.getImage(this.tilemap.tilesetImage);
+    if (!tilesetImage) return;
 
-    const cameraPos = this.editor.getCameraPosition();
-    TilemapRenderer.render(
-      renderer,
-      this.tilemap,
-      cameraPos.x,
-      cameraPos.y,
-      renderer.getWidth() / this.editor.getCameraZoom(),
-      renderer.getHeight() / this.editor.getCameraZoom()
-    );
+    const tileSize = this.tilemap.tileSize;
+    const tilesPerRow = this.tilemap.tilesetColumns;
 
-    // Render collision layer overlay if tool is active
-    if (this.editor.getTool() === EditorTool.Collision) {
-      TilemapRenderer.renderCollisionLayer(
-        renderer,
-        this.tilemap,
-        cameraPos.x,
-        cameraPos.y,
-        renderer.getWidth() / this.editor.getCameraZoom(),
-        renderer.getHeight() / this.editor.getCameraZoom()
-      );
-    }
+    for (const layer of this.tilemap.layers) {
+      if (!layer.visible) continue;
 
-    // Render tile preview at mouse position
-    if (this.editor.getTool() === EditorTool.Paint || this.editor.getTool() === EditorTool.Erase) {
-      const mousePos = Input.getMousePosition();
-      const worldPos = renderer.screenToWorld(mousePos);
-      const tile = this.tilemap.worldToTile(worldPos.x, worldPos.y);
-      const worldTilePos = this.tilemap.tileToWorld(tile.x, tile.y);
-      const screenPos = renderer.worldToScreen(new Vector2(worldTilePos.x, worldTilePos.y));
+      for (let y = 0; y < this.tilemap.height; y++) {
+        for (let x = 0; x < this.tilemap.width; x++) {
+          const tileId = layer.data[y * this.tilemap.width + x];
+          if (tileId === 0) continue;
 
-      renderer.strokeRect(
-        screenPos.x,
-        screenPos.y,
-        this.tilemap.tileSize * this.editor.getCameraZoom(),
-        this.tilemap.tileSize * this.editor.getCameraZoom(),
-        '#ffff00',
-        2
-      );
+          const tileX = x * tileSize;
+          const tileY = y * tileSize;
+
+          // Calculate source position in tileset
+          const srcX = ((tileId - 1) % tilesPerRow) * tileSize;
+          const srcY = Math.floor((tileId - 1) / tilesPerRow) * tileSize;
+
+          renderer.drawImage(
+            tilesetImage,
+            tileX,
+            tileY,
+            tileSize,
+            tileSize,
+            srcX,
+            srcY,
+            tileSize,
+            tileSize
+          );
+        }
+      }
     }
   }
 }

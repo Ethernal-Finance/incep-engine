@@ -1,74 +1,43 @@
-import { EntityManager } from '../entities/EntityManager';
-import { Entity } from '../entities/Entity';
-import { Transform } from '../components/Transform';
+import { EntitySystem, Entity } from './EntitySystem';
 import { Movement } from '../components/Movement';
+import { Transform } from '../components/Transform';
 import { Vector2 } from '../utils/Vector2';
-import { Input } from '../engine/Input';
+import { MathUtils } from '../utils/Math';
 
 export class MovementSystem {
-  private entityManager: EntityManager;
-
-  constructor(entityManager: EntityManager) {
-    this.entityManager = entityManager;
-  }
+  constructor(private entitySystem: EntitySystem) {}
 
   update(deltaTime: number): void {
-    const entities = this.entityManager.getEntitiesWithComponent(Movement);
+    const entities = this.entitySystem.getEntitiesWithComponent('movement');
 
     for (const entity of entities) {
-      if (!entity.enabled) continue;
+      const movement = entity.getComponent<Movement>('movement');
+      const transform = entity.getComponent<Transform>('transform');
 
-      const transform = entity.getComponent(Transform);
-      const movement = entity.getComponent(Movement);
-      
-      if (!transform || !movement || !movement.enabled) continue;
+      if (!movement || !transform) continue;
 
-      // Update velocity based on direction
-      if (movement.direction.magnitude() > 0) {
-        const normalizedDir = movement.direction.normalize();
-        movement.velocity = movement.velocity.add(
-          normalizedDir.multiply(movement.acceleration * deltaTime)
-        );
-        
-        // Clamp to max speed
-        if (movement.velocity.magnitude() > movement.maxSpeed) {
-          movement.velocity = movement.velocity.normalize().multiply(movement.maxSpeed);
-        }
-      } else {
-        // Apply friction
-        movement.velocity = movement.velocity.multiply(movement.friction);
-        if (movement.velocity.magnitude() < 0.1) {
-          movement.velocity = Vector2.zero();
-        }
+      // Apply friction
+      movement.velocity.multiply(Math.pow(movement.friction, deltaTime * 60));
+
+      // Clamp velocity to max speed
+      const speed = movement.velocity.magnitude();
+      if (speed > movement.maxSpeed) {
+        movement.velocity.normalize().multiply(movement.maxSpeed);
       }
 
       // Update position
-      transform.position = transform.position.add(movement.velocity.multiply(deltaTime));
+      const delta = Vector2.multiply(movement.velocity, deltaTime);
+      transform.position.add(delta);
     }
   }
 
-  handlePlayerInput(player: Entity): void {
-    const movement = player.getComponent(Movement);
+  moveEntity(entity: Entity, direction: Vector2, deltaTime: number): void {
+    const movement = entity.getComponent<Movement>('movement');
     if (!movement) return;
 
-    const wasd = Input.getWASD();
-    const arrows = {
-      up: Input.getArrowUp(),
-      down: Input.getArrowDown(),
-      left: Input.getArrowLeft(),
-      right: Input.getArrowRight()
-    };
-
-    // Calculate direction from input
-    let dirX = 0;
-    let dirY = 0;
-
-    if (wasd.d || arrows.right) dirX += 1;
-    if (wasd.a || arrows.left) dirX -= 1;
-    if (wasd.w || arrows.up) dirY -= 1;
-    if (wasd.s || arrows.down) dirY += 1;
-
-    movement.direction = new Vector2(dirX, dirY);
+    const normalized = Vector2.normalize(direction);
+    const acceleration = Vector2.multiply(normalized, movement.acceleration * deltaTime);
+    movement.velocity.add(acceleration);
   }
 }
 

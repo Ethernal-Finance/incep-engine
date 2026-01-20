@@ -1,0 +1,33 @@
+export class AssetLoader {
+  private static images: Map<string, HTMLImageElement> = new Map();
+  private static loaded: boolean = false;
+
+  static async loadImage(path: string, name: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        AssetLoader.images.set(name, img);
+        resolve();
+      };
+      img.onerror = () => {
+        reject(new Error(`Failed to load image: ${path}`));
+      };
+      img.src = path;
+    });
+  }
+
+  static async loadImages(assets: { path: string; name: string }[]): Promise<void> {
+    const promises = assets.map((asset) => AssetLoader.loadImage(asset.path, asset.name));
+    await Promise.all(promises);
+    AssetLoader.loaded = true;
+  }
+
+  static getImage(name: string): HTMLImageElement | null {
+    return AssetLoader.images.get(name) || null;
+  }
+
+  static isLoaded(): boolean {
+    return AssetLoader.loaded;
+  }
+}
+

@@ -1,51 +1,34 @@
-import { Component } from './Component';
-
-export class Health extends Component {
-  public maxHealth: number = 100;
-  public currentHealth: number = 100;
-  public invulnerable: boolean = false;
-  public invulnerableTime: number = 0;
+export class Health {
+  public current: number;
+  public max: number;
   public onDeath?: () => void;
   public onDamage?: (amount: number) => void;
   public onHeal?: (amount: number) => void;
 
-  takeDamage(amount: number): void {
-    if (this.invulnerable || this.currentHealth <= 0) return;
+  constructor(max: number = 100) {
+    this.max = max;
+    this.current = max;
+  }
 
-    this.currentHealth = Math.max(0, this.currentHealth - amount);
+  damage(amount: number): void {
+    this.current = Math.max(0, this.current - amount);
     if (this.onDamage) {
       this.onDamage(amount);
     }
-
-    if (this.currentHealth <= 0) {
-      if (this.onDeath) {
-        this.onDeath();
-      }
+    if (this.current <= 0 && this.onDeath) {
+      this.onDeath();
     }
   }
 
   heal(amount: number): void {
-    this.currentHealth = Math.min(this.maxHealth, this.currentHealth + amount);
+    this.current = Math.min(this.max, this.current + amount);
     if (this.onHeal) {
       this.onHeal(amount);
     }
   }
 
-  isAlive(): boolean {
-    return this.currentHealth > 0;
-  }
-
-  getHealthPercent(): number {
-    return this.currentHealth / this.maxHealth;
-  }
-
-  clone(): Health {
-    const health = new Health();
-    health.maxHealth = this.maxHealth;
-    health.currentHealth = this.currentHealth;
-    health.invulnerable = this.invulnerable;
-    health.invulnerableTime = this.invulnerableTime;
-    return health;
+  isDead(): boolean {
+    return this.current <= 0;
   }
 }
 

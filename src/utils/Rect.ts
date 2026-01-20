@@ -8,8 +8,13 @@ export class Rect {
     public height: number = 0
   ) {}
 
-  static fromPositionAndSize(position: Vector2, size: Vector2): Rect {
-    return new Rect(position.x, position.y, size.x, size.y);
+  static fromCenter(center: Vector2, width: number, height: number): Rect {
+    return new Rect(
+      center.x - width / 2,
+      center.y - height / 2,
+      width,
+      height
+    );
   }
 
   get left(): number {
@@ -49,15 +54,6 @@ export class Rect {
     );
   }
 
-  containsRect(other: Rect): boolean {
-    return (
-      this.x <= other.x &&
-      this.right >= other.right &&
-      this.y <= other.y &&
-      this.bottom >= other.bottom
-    );
-  }
-
   intersects(other: Rect): boolean {
     return !(
       this.right < other.x ||
@@ -67,23 +63,8 @@ export class Rect {
     );
   }
 
-  getIntersection(other: Rect): Rect | null {
-    if (!this.intersects(other)) return null;
-
-    const left = Math.max(this.x, other.x);
-    const top = Math.max(this.y, other.y);
-    const right = Math.min(this.right, other.right);
-    const bottom = Math.min(this.bottom, other.bottom);
-
-    return new Rect(left, top, right - left, bottom - top);
-  }
-
-  clone(): Rect {
+  copy(): Rect {
     return new Rect(this.x, this.y, this.width, this.height);
-  }
-
-  toString(): string {
-    return `Rect(${this.x}, ${this.y}, ${this.width}, ${this.height})`;
   }
 }
 

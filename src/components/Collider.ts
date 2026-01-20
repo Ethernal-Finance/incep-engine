@@ -1,4 +1,3 @@
-import { Component } from './Component';
 import { Rect } from '../utils/Rect';
 import { Vector2 } from '../utils/Vector2';
 
@@ -8,39 +7,35 @@ export enum CollisionLayer {
   Trigger = 2,
   Player = 4,
   Enemy = 8,
-  Item = 16,
-  NPC = 32
+  Item = 16
 }
 
-export class Collider extends Component {
+export class Collider {
   public bounds: Rect;
-  public layer: CollisionLayer = CollisionLayer.Solid;
-  public isTrigger: boolean = false;
-  public offset: Vector2 = Vector2.zero();
-  public onCollisionEnter?: (other: Collider) => void;
-  public onCollisionExit?: (other: Collider) => void;
-  public onCollisionStay?: (other: Collider) => void;
+  public layer: CollisionLayer;
+  public isTrigger: boolean;
+  public onCollision?: (other: Collider) => void;
 
-  constructor(width: number = 0, height: number = 0, x: number = 0, y: number = 0) {
-    super();
+  constructor(
+    x: number = 0,
+    y: number = 0,
+    width: number = 32,
+    height: number = 32,
+    layer: CollisionLayer = CollisionLayer.Solid,
+    isTrigger: boolean = false
+  ) {
     this.bounds = new Rect(x, y, width, height);
+    this.layer = layer;
+    this.isTrigger = isTrigger;
   }
 
-  getWorldBounds(transform: Vector2): Rect {
-    return new Rect(
-      transform.x + this.offset.x + this.bounds.x,
-      transform.y + this.offset.y + this.bounds.y,
-      this.bounds.width,
-      this.bounds.height
-    );
+  getPosition(): Vector2 {
+    return this.bounds.position;
   }
 
-  clone(): Collider {
-    const collider = new Collider(this.bounds.width, this.bounds.height, this.bounds.x, this.bounds.y);
-    collider.layer = this.layer;
-    collider.isTrigger = this.isTrigger;
-    collider.offset = this.offset.clone();
-    return collider;
+  setPosition(x: number, y: number): void {
+    this.bounds.x = x;
+    this.bounds.y = y;
   }
 }
 

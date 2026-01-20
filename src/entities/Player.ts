@@ -1,43 +1,25 @@
-import { Entity } from './Entity';
+import { Entity } from '../systems/EntitySystem';
 import { Transform } from '../components/Transform';
 import { Sprite } from '../components/Sprite';
 import { Collider, CollisionLayer } from '../components/Collider';
 import { Movement } from '../components/Movement';
 import { Health } from '../components/Health';
 import { Inventory } from '../components/Inventory';
-import { AssetLoader } from '../engine/AssetLoader';
 
-export class Player extends Entity {
-  constructor(x: number = 0, y: number = 0) {
-    super('Player');
-    
-    this.addComponent(new Transform(x, y));
-    
-    const sprite = this.addComponent(new Sprite());
-    sprite.width = 32;
-    sprite.height = 32;
-    sprite.offsetX = -16;
-    sprite.offsetY = -16;
-    
-    const collider = this.addComponent(new Collider(24, 24, -12, -12));
-    collider.layer = CollisionLayer.Player;
-    
-    const movement = this.addComponent(new Movement());
-    movement.speed = 150;
-    movement.maxSpeed = 150;
-    
-    this.addComponent(new Health());
-    this.addComponent(new Inventory());
-  }
+export class Player {
+  static create(entitySystem: any, x: number, y: number): Entity {
+    const player = entitySystem.createEntity('Player');
 
-  static async createWithSprite(x: number, y: number, spritePath: string): Promise<Player> {
-    const player = new Player(x, y);
-    const sprite = player.getComponent(Sprite)!;
-    
-    await AssetLoader.loadImage(spritePath);
-    sprite.image = AssetLoader.getImage(spritePath);
-    sprite.imagePath = spritePath;
-    
+    player.addComponent('transform', new Transform(x, y));
+    player.addComponent('sprite', new Sprite('player', 32, 32));
+    player.addComponent(
+      'collider',
+      new Collider(0, 0, 28, 28, CollisionLayer.Player, false)
+    );
+    player.addComponent('movement', new Movement(150, 200, 600, 0.85));
+    player.addComponent('health', new Health(100));
+    player.addComponent('inventory', new Inventory(20));
+
     return player;
   }
 }

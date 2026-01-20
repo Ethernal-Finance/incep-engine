@@ -18,20 +18,16 @@ export class Time {
     return Time.deltaTime * Time.timeScale;
   }
 
-  static getUnscaledDeltaTime(): number {
-    return Time.deltaTime;
-  }
-
   static getFixedDeltaTime(): number {
     return Time.fixedDeltaTime * Time.timeScale;
   }
 
-  static setTimeScale(scale: number): void {
-    Time.timeScale = Math.max(0, scale);
-  }
-
   static getTimeScale(): number {
     return Time.timeScale;
+  }
+
+  static setTimeScale(scale: number): void {
+    Time.timeScale = Math.max(0, scale);
   }
 }
 
