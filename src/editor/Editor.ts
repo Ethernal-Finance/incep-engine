@@ -44,24 +44,12 @@ export class Editor {
     
     this.camera = new Camera();
     
-    // Center the 256x256 grid (8x8 tiles * 32px = 256x256)
-    const gridSize = 256;
-    this.gridOffset.x = -gridSize / 2;
-    this.gridOffset.y = -gridSize / 2;
-    this.camera.position.x = this.gridOffset.x;
-    this.camera.position.y = this.gridOffset.y;
+    this.updateGridMetrics();
     
     this.tilemapEditor = new TilemapEditor(this.currentLevel.tilemap);
     this.entityPlacer = new EntityPlacer(this.currentLevel);
     this._propertyInspector = new PropertyInspector();
     this.setupUI();
-    
-    // Test: Place a tile at (0, 0) to verify rendering works
-    const testLayer = this.currentLevel.tilemap.layers[0];
-    if (testLayer) {
-      this.currentLevel.tilemap.setTile(testLayer.name, 0, 0, 1);
-      console.log('Test tile placed at (0, 0) - you should see a tile in the top-left corner');
-    }
   }
 
   private initializeTileset(): void {
@@ -79,6 +67,19 @@ export class Editor {
     this.currentLevel.tilemap.tilesetImage = 'default-tileset';
     this.currentLevel.tilemap.tilesetColumns = cols;
     this.currentLevel.tilemap.tilesetRows = rows;
+  }
+
+  private updateGridMetrics(): void {
+    const gridWidth = this.currentLevel.tilemap.width * this.currentLevel.tilemap.tileSize;
+    const gridHeight = this.currentLevel.tilemap.height * this.currentLevel.tilemap.tileSize;
+    this.gridOffset.x = -gridWidth / 2;
+    this.gridOffset.y = -gridHeight / 2;
+    this.camera.position.x = this.gridOffset.x;
+    this.camera.position.y = this.gridOffset.y;
+  }
+
+  refreshTilemapMetrics(): void {
+    this.updateGridMetrics();
   }
 
   private setupUI(): void {
@@ -143,8 +144,7 @@ export class Editor {
     // Convert screen coordinates to world coordinates
     // The rendering transform is: translate(center) -> scale(zoom) -> translate(gridOffset)
     // To reverse this: world = (screen - center) / zoom - gridOffset
-    // gridOffset is -128, so subtracting it adds 128
-    // The grid in world space goes from 0 to 256 (8 tiles * 32px)
+    // gridOffset is negative, so subtracting it moves into grid space
     const worldX = (this.mousePosition.x - centerX) / this.zoom - this.gridOffset.x;
     const worldY = (this.mousePosition.y - centerY) / this.zoom - this.gridOffset.y;
     const worldPos = new Vector2(worldX, worldY);
@@ -187,7 +187,7 @@ export class Editor {
     // Render entities
     this.entityPlacer.render(this.renderer);
 
-    // Render grid (only within 256x256 area)
+    // Render grid within the tilemap area
     this.renderGrid();
 
     this.renderer.restore();
@@ -195,13 +195,13 @@ export class Editor {
 
   private renderGrid(): void {
     const tileSize = this.currentLevel.tilemap.tileSize;
-    const GRID_SIZE = 256; // 8x8 tiles * 32px
+    const gridWidth = this.currentLevel.tilemap.width * tileSize;
+    const gridHeight = this.currentLevel.tilemap.height * tileSize;
     
-    // Only render grid within the 256x256 area
     const startX = 0;
-    const endX = GRID_SIZE;
+    const endX = gridWidth;
     const startY = 0;
-    const endY = GRID_SIZE;
+    const endY = gridHeight;
 
     const ctx = this.renderer.getContext();
     ctx.strokeStyle = '#444444';
@@ -225,7 +225,7 @@ export class Editor {
     // Draw grid boundary
     ctx.strokeStyle = '#ffd700';
     ctx.lineWidth = 2;
-    ctx.strokeRect(startX, startY, GRID_SIZE, GRID_SIZE);
+    ctx.strokeRect(startX, startY, gridWidth, gridHeight);
   }
 
   getLevel(): Level {
@@ -244,10 +244,10 @@ export class Editor {
     this.currentLevel = level;
     this.tilemapEditor = new TilemapEditor(level.tilemap);
     this.entityPlacer = new EntityPlacer(level);
+    this.updateGridMetrics();
   }
 
   saveLevel(): string {
     return JSON.stringify(this.currentLevel.toJSON(), null, 2);
   }
 }
-

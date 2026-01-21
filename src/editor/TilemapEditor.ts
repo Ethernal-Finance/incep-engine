@@ -37,12 +37,11 @@ export class TilemapEditor {
 
   update(_deltaTime: number, worldPos: Vector2, _camera: Camera, _zoom: number, _viewportWidth: number, _viewportHeight: number, mouseButtonDown: boolean, mouseButton: boolean): void {
     // Snap to grid (worldPos is already in world coordinates)
-    // The grid in world space goes from 0 to 256 (8 tiles * 32px)
-    // So we can directly calculate tile coordinates
+    // The grid size is derived from the tilemap dimensions
     const tileX = Math.floor(worldPos.x / this.tilemap.tileSize);
     const tileY = Math.floor(worldPos.y / this.tilemap.tileSize);
     
-    // Clamp to grid bounds (0-7 for 8x8 grid)
+    // Clamp to grid bounds
     const clampedX = Math.max(0, Math.min(this.tilemap.width - 1, tileX));
     const clampedY = Math.max(0, Math.min(this.tilemap.height - 1, tileY));
 
@@ -70,9 +69,9 @@ export class TilemapEditor {
       
       // Fill rectangle
       const minX = Math.max(0, Math.min(this.stretchStart.x, this.stretchEnd.x));
-      const maxX = Math.min(7, Math.max(this.stretchStart.x, this.stretchEnd.x));
+      const maxX = Math.min(this.tilemap.width - 1, Math.max(this.stretchStart.x, this.stretchEnd.x));
       const minY = Math.max(0, Math.min(this.stretchStart.y, this.stretchEnd.y));
-      const maxY = Math.min(7, Math.max(this.stretchStart.y, this.stretchEnd.y));
+      const maxY = Math.min(this.tilemap.height - 1, Math.max(this.stretchStart.y, this.stretchEnd.y));
 
       // Fill the rectangle with tiles
       for (let y = minY; y <= maxY; y++) {
@@ -155,4 +154,3 @@ export class TilemapEditor {
     }
   }
 }
-

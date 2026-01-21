@@ -260,10 +260,12 @@ export class TileSelector {
 
   setOnTilesetChanged(callback: (info: TilesetInfo) => void): void {
     this.onTilesetChanged = callback;
+    if (this.currentTilesetInfo) {
+      this.onTilesetChanged(this.currentTilesetInfo);
+    }
   }
 
   getCurrentTilesetInfo(): TilesetInfo | null {
     return this.currentTilesetInfo;
   }
 }
-

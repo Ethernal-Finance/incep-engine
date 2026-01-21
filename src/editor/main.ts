@@ -54,6 +54,7 @@ class EditorApp {
       level.tilemap.tilesetColumns = info.columns;
       level.tilemap.tilesetRows = info.rows;
       level.tilemap.tileSize = info.tileSize;
+      this.editor.refreshTilemapMetrics();
     });
     
     // Wire tool buttons first
@@ -419,4 +420,3 @@ if (document.readyState === 'loading') {
 } else {
   new EditorApp();
 }
-
