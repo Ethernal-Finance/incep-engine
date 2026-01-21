@@ -21,6 +21,8 @@ export class TileSelector {
   private previewCols: number = 0;
   private previewRows: number = 0;
   private previewTileSize: number = 32;
+  private renderQueued: boolean = false;
+  private lastRenderSize: { width: number; height: number } | null = null;
   private readonly baseDisplayTileSize = 40;
   private zoomLevel: number = 1;
   private readonly padding = 4;
@@ -208,6 +210,7 @@ export class TileSelector {
     this.previewCols = cols;
     this.previewRows = rows;
     this.previewTileSize = tileSize;
+    this.lastRenderSize = null;
 
     if (this.selectionStart && (this.selectionStart.col >= cols || this.selectionStart.row >= rows)) {
       this.selectionStart = null;
@@ -239,9 +242,6 @@ export class TileSelector {
   }
 
   selectTile(tileId: number): void {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TileSelector.ts:260',message:'Tile selected',data:{tileId,hasCallback:!!this.onTileSelected},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     this.selectedTile = tileId;
     this.selectedStampWidth = 1;
     this.selectedStampHeight = 1;
@@ -251,12 +251,9 @@ export class TileSelector {
       this.tileInfo.textContent = `Tile ${tileId} selected`;
     }
     if (this.onTileSelected) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TileSelector.ts:266',message:'Calling onTileSelected callback',data:{tileId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       this.onTileSelected(tileId);
     }
-    this.renderTileset();
+    this.requestRenderTileset();
   }
 
   getSelectedTile(): number {
@@ -289,7 +286,7 @@ export class TileSelector {
     this.isSelecting = true;
     this.selectionStart = { col: tile.col, row: tile.row };
     this.selectionEnd = { col: tile.col, row: tile.row };
-    this.renderTileset();
+    this.requestRenderTileset();
     this.previewCanvas.setPointerCapture(event.pointerId);
   }
 
@@ -298,7 +295,7 @@ export class TileSelector {
     const tile = this.getTileFromEvent(event);
     if (!tile) return;
     this.selectionEnd = { col: tile.col, row: tile.row };
-    this.renderTileset();
+    this.requestRenderTileset();
   }
 
   private onPreviewPointerUp(event: PointerEvent): void {
@@ -315,6 +312,9 @@ export class TileSelector {
 
     if (width === 1 && height === 1) {
       const tileId = minRow * this.previewCols + minCol + 1;
+      if (this.previewCanvas) {
+        this.previewCanvas.releasePointerCapture(event.pointerId);
+      }
       this.selectTile(tileId);
       return;
     }
@@ -354,7 +354,16 @@ export class TileSelector {
       this.onStampSelected(tileIds, width, height);
     }
 
-    this.renderTileset();
+    this.requestRenderTileset();
+  }
+
+  private requestRenderTileset(): void {
+    if (this.renderQueued) return;
+    this.renderQueued = true;
+    requestAnimationFrame(() => {
+      this.renderQueued = false;
+      this.renderTileset();
+    });
   }
 
   private getTileFromEvent(event: PointerEvent): { col: number; row: number } | null {
@@ -377,9 +386,13 @@ export class TileSelector {
     const cols = this.previewCols;
     const rows = this.previewRows;
     const displayTileSize = this.getDisplayTileSize();
-
-    this.previewCanvas.width = cols * (displayTileSize + this.padding) + this.padding;
-    this.previewCanvas.height = rows * (displayTileSize + this.padding) + this.padding;
+    const width = cols * (displayTileSize + this.padding) + this.padding;
+    const height = rows * (displayTileSize + this.padding) + this.padding;
+    if (!this.lastRenderSize || this.lastRenderSize.width !== width || this.lastRenderSize.height !== height) {
+      this.previewCanvas.width = width;
+      this.previewCanvas.height = height;
+      this.lastRenderSize = { width, height };
+    }
 
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(0, 0, this.previewCanvas.width, this.previewCanvas.height);
@@ -435,7 +448,7 @@ export class TileSelector {
     zoomInput.addEventListener('input', () => {
       const value = Number(zoomInput.value);
       this.zoomLevel = isNaN(value) ? 1 : value / 100;
-      this.renderTileset();
+      this.requestRenderTileset();
     });
   }
 
