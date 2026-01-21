@@ -26,7 +26,8 @@ export enum EditorTool {
   Rectangle = 'rectangle',
   Eyedropper = 'eyedropper',
   Entity = 'entity',
-  Collision = 'collision'
+  Collision = 'collision',
+  Spawn = 'spawn'
 }
 
 export class Editor {
@@ -266,7 +267,19 @@ export class Editor {
       }
     }
     
-    if (this.currentTool === EditorTool.Paint || this.currentTool === EditorTool.Erase || this.currentTool === EditorTool.Collision || 
+    if (this.currentTool === EditorTool.Spawn) {
+      if (mouseButtonDown) {
+        const tileSize = this.currentLevel.tilemap.tileSize;
+        const tileX = Math.floor(worldPos.x / tileSize);
+        const tileY = Math.floor(worldPos.y / tileSize);
+        const clampedX = Math.max(0, Math.min(this.currentLevel.tilemap.width - 1, tileX));
+        const clampedY = Math.max(0, Math.min(this.currentLevel.tilemap.height - 1, tileY));
+        this.currentLevel.spawnPoint = {
+          x: clampedX * tileSize,
+          y: clampedY * tileSize
+        };
+      }
+    } else if (this.currentTool === EditorTool.Paint || this.currentTool === EditorTool.Erase || this.currentTool === EditorTool.Collision || 
         this.currentTool === EditorTool.Brush || this.currentTool === EditorTool.FloodFill || this.currentTool === EditorTool.Line || 
         this.currentTool === EditorTool.Rectangle || this.currentTool === EditorTool.Eyedropper) {
       // Pass mouse button state to tilemap editor
@@ -324,6 +337,26 @@ export class Editor {
 
     // Render tilemap
     this.tilemapEditor.render(this.renderer);
+
+    // Render spawn point marker
+    if (this.currentLevel.spawnPoint) {
+      const tileSize = this.currentLevel.tilemap.tileSize;
+      const ctx = this.renderer.getContext();
+      ctx.strokeStyle = '#4a9eff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        this.currentLevel.spawnPoint.x,
+        this.currentLevel.spawnPoint.y,
+        tileSize,
+        tileSize
+      );
+      ctx.beginPath();
+      ctx.moveTo(this.currentLevel.spawnPoint.x, this.currentLevel.spawnPoint.y);
+      ctx.lineTo(this.currentLevel.spawnPoint.x + tileSize, this.currentLevel.spawnPoint.y + tileSize);
+      ctx.moveTo(this.currentLevel.spawnPoint.x + tileSize, this.currentLevel.spawnPoint.y);
+      ctx.lineTo(this.currentLevel.spawnPoint.x, this.currentLevel.spawnPoint.y + tileSize);
+      ctx.stroke();
+    }
 
     // Render entities
     this.entityPlacer.render(this.renderer);

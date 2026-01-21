@@ -197,6 +197,11 @@ body {
   gap: 12px;
 }
 
+.layer-buttons {
+  display: flex;
+  gap: 8px;
+}
+
 .sidebar-section h3 {
   font-size: 14px;
   font-weight: 600;

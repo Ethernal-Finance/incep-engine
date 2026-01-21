@@ -6,6 +6,7 @@ import { Level } from '../data/Level';
 import { Game } from '../engine/Game';
 import { GameScene } from '../runtime/GameScene';
 import { Vector2 } from '../utils/Vector2';
+import walkSpriteUrl from '../../assets/walk.png';
 
 class EditorApp {
   private editor: Editor;
@@ -89,6 +90,21 @@ class EditorApp {
         const level = this.editor.getLevel();
         const newLayerName = `Layer ${level.tilemap.layers.length}`;
         level.tilemap.addLayer(newLayerName);
+        this.updateLayerSelector();
+      });
+    }
+
+    // Wire rename layer button
+    const renameLayerBtn = this.editorUI.getRenameLayerButton();
+    if (renameLayerBtn) {
+      renameLayerBtn.addEventListener('click', () => {
+        const level = this.editor.getLevel();
+        const activeIndex = this.editor.getActiveLayer();
+        const activeLayer = level.tilemap.layers[activeIndex];
+        if (!activeLayer) return;
+        const newName = prompt('Rename layer', activeLayer.name);
+        if (!newName) return;
+        activeLayer.name = newName;
         this.updateLayerSelector();
       });
     }
@@ -250,6 +266,8 @@ class EditorApp {
         this.editorUI.setTool(EditorTool.Line);
       } else if (e.key === 'I' || (e.key === 'D' && e.altKey)) {
         this.editorUI.setTool(EditorTool.Eyedropper);
+      } else if (e.key === '6') {
+        this.editorUI.setTool(EditorTool.Spawn);
       }
       
       // Undo/Redo
@@ -414,6 +432,13 @@ class EditorApp {
           name: type
         });
       }
+    }
+
+    if (!AssetLoader.getImage('walk')) {
+      assetsToLoad.push({
+        path: walkSpriteUrl,
+        name: 'walk'
+      });
     }
 
     // Load assets (failures are non-critical)

@@ -1,5 +1,5 @@
 import { Vector2 } from '../utils/Vector2';
-import { TileStamp, TileStampManager } from './TileStamp';
+import { TileStampManager } from './TileStamp';
 
 export interface PaintStroke {
   layerName: string;
@@ -42,8 +42,12 @@ export class PaintingTools {
     // Avoid repainting same cell during drag
     const cellKey = `${tileX},${tileY}`;
     if (this.visitedCells.has(cellKey)) return;
-    
-    this.paintAtCell(tileX, tileY, getTile, setTile);
+
+    if (this.lastPaintCell) {
+      this.paintLineBetween(this.lastPaintCell.x, this.lastPaintCell.y, tileX, tileY, getTile, setTile);
+    } else {
+      this.paintAtCell(tileX, tileY, getTile, setTile);
+    }
   }
 
   private paintAtCell(tileX: number, tileY: number, getTile: (x: number, y: number) => number, setTile: (x: number, y: number, tileId: number) => void): void {
@@ -53,8 +57,6 @@ export class PaintingTools {
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PaintingTools.ts:49',message:'paintAtCell called',data:{tileX,tileY,stampTileIds:stamp.tileIds,stampWidth:stamp.width,stampHeight:stamp.height},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
     // #endregion
-    const cellKey = `${tileX},${tileY}`;
-    
     // Paint stamp pattern
     for (let sy = 0; sy < stamp.height; sy++) {
       for (let sx = 0; sx < stamp.width; sx++) {
@@ -84,6 +86,32 @@ export class PaintingTools {
     }
     
     this.lastPaintCell = new Vector2(tileX, tileY);
+  }
+
+  private paintLineBetween(startX: number, startY: number, endX: number, endY: number, getTile: (x: number, y: number) => number, setTile: (x: number, y: number, tileId: number) => void): void {
+    let x0 = startX;
+    let y0 = startY;
+    const x1 = endX;
+    const y1 = endY;
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+
+    while (true) {
+      this.paintAtCell(x0, y0, getTile, setTile);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy) {
+        err -= dy;
+        x0 += sx;
+      }
+      if (e2 < dx) {
+        err += dx;
+        y0 += sy;
+      }
+    }
   }
 
   endBrushStroke(): PaintStroke | null {

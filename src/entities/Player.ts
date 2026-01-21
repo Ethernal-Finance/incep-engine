@@ -11,7 +11,7 @@ export class Player {
     const player = entitySystem.createEntity('Player');
 
     player.addComponent('transform', new Transform(x, y));
-    player.addComponent('sprite', new Sprite('player', 32, 32));
+    player.addComponent('sprite', new Sprite('walk', 64, 64));
     player.addComponent(
       'collider',
       new Collider(0, 0, 28, 28, CollisionLayer.Player, false)

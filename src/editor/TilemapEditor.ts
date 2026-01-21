@@ -7,7 +7,7 @@ import { AssetLoader } from '../engine/AssetLoader';
 import { EditorTool } from './Editor';
 import { PaintingTools } from './PaintingTools';
 import { UndoSystem } from './UndoSystem';
-import { CollisionSystem, CollisionType } from './CollisionSystem';
+import { CollisionSystem } from './CollisionSystem';
 
 export class TilemapEditor {
   private selectedTile: number = 1;
@@ -23,11 +23,19 @@ export class TilemapEditor {
   private currentStroke: any = null;
   private paintMode: 'brush' | 'rectangle' | 'floodfill' | 'line' = 'brush';
   private lineStart: Vector2 | null = null;
+  private hoverCell: Vector2 | null = null;
+  private lastCollisionCell: Vector2 | null = null;
+  private lastCollisionEraseCell: Vector2 | null = null;
 
   constructor(private tilemap: Tilemap, undoSystem?: UndoSystem, collisionSystem?: CollisionSystem) {
     // Ensure we have at least a background layer
     if (this.tilemap.layers.length === 0) {
       this.tilemap.addLayer('background');
+    }
+
+    if (!this.tilemap.getLayer('Collisions')) {
+      const collisionLayer = this.tilemap.addLayer('Collisions');
+      collisionLayer.visible = false;
     }
     
     this.paintingTools = new PaintingTools();
@@ -95,6 +103,7 @@ export class TilemapEditor {
     // Clamp to grid bounds
     const clampedX = Math.max(0, Math.min(this.tilemap.width - 1, tileX));
     const clampedY = Math.max(0, Math.min(this.tilemap.height - 1, tileY));
+    this.hoverCell = new Vector2(clampedX, clampedY);
 
     const activeLayer = this.tilemap.layers[this.activeLayerIndex];
     if (!activeLayer) {
@@ -119,7 +128,12 @@ export class TilemapEditor {
       }
       // #endregion
       if (mouseButtonDown) {
-        if (this.paintMode === 'brush') {
+        const rectangleDrag = Input.getKey('Shift');
+        if (rectangleDrag) {
+          this.isStretching = true;
+          this.stretchStart = new Vector2(clampedX, clampedY);
+          this.stretchEnd = new Vector2(clampedX, clampedY);
+        } else if (this.paintMode === 'brush') {
           // Start brush stroke
           // #region agent log
           const stampBefore = this.paintingTools.getStampManager().getCurrentStamp();
@@ -167,7 +181,7 @@ export class TilemapEditor {
         this.paintingTools.continueBrushStroke(clampedX, clampedY, getTile, setTile);
       }
 
-      if (mouseButton && this.paintMode === 'rectangle' && this.isStretching && this.stretchStart) {
+      if (mouseButton && this.isStretching && this.stretchStart) {
         // Update rectangle
         this.stretchEnd = new Vector2(clampedX, clampedY);
       }
@@ -184,7 +198,7 @@ export class TilemapEditor {
             );
           }
           this.currentStroke = null;
-        } else if (this.paintMode === 'rectangle' && this.isStretching && this.stretchStart && this.stretchEnd) {
+        } else if (this.isStretching && this.stretchStart && this.stretchEnd) {
           // Complete rectangle fill
           const stroke = this.paintingTools.fillRectangle(
             activeLayer.name,
@@ -285,29 +299,42 @@ export class TilemapEditor {
     // Handle Collision tool
     else if (this.currentTool === EditorTool.Collision && this.collisionSystem) {
       if (mouseButtonDown) {
-        // Toggle collision on click
-        if (clampedX >= 0 && clampedX < this.tilemap.width && clampedY >= 0 && clampedY < this.tilemap.height) {
-          const tileId = this.tilemap.getTile(activeLayer.name, clampedX, clampedY);
-          if (tileId > 0) {
-            const currentCollision = this.collisionSystem.getTileCollision(tileId);
-            // Toggle between none and full block for MVP
-            if (currentCollision.type === CollisionType.None) {
-              this.collisionSystem.setTileCollision(tileId, this.collisionSystem.createFullBlock());
-            } else {
-              this.collisionSystem.setTileCollision(tileId, { type: CollisionType.None });
-            }
-          }
+        const rectangleDrag = Input.getKey('Shift');
+        if (rectangleDrag) {
+          this.isStretching = true;
+          this.stretchStart = new Vector2(clampedX, clampedY);
+          this.stretchEnd = new Vector2(clampedX, clampedY);
+        } else {
+          this.applyCollisionPaint(this.lastCollisionCell, clampedX, clampedY, true);
+          this.lastCollisionCell = new Vector2(clampedX, clampedY);
         }
+      }
+
+      if (mouseButton && !this.isStretching) {
+        this.applyCollisionPaint(this.lastCollisionCell, clampedX, clampedY, true);
+        this.lastCollisionCell = new Vector2(clampedX, clampedY);
       }
 
       // Right click - remove collision
       if (Input.getMouseButton(2)) {
-        if (clampedX >= 0 && clampedX < this.tilemap.width && clampedY >= 0 && clampedY < this.tilemap.height) {
-          const tileId = this.tilemap.getTile(activeLayer.name, clampedX, clampedY);
-          if (tileId > 0) {
-            this.collisionSystem.setTileCollision(tileId, { type: CollisionType.None });
-          }
+        this.applyCollisionPaint(this.lastCollisionEraseCell, clampedX, clampedY, false);
+        this.lastCollisionEraseCell = new Vector2(clampedX, clampedY);
+      } else if (Input.getMouseButtonUp(2)) {
+        this.lastCollisionEraseCell = null;
+      }
+
+      if (mouseButton && this.isStretching && this.stretchStart) {
+        this.stretchEnd = new Vector2(clampedX, clampedY);
+      }
+
+      if (Input.getMouseButtonUp(0)) {
+        if (this.isStretching && this.stretchStart && this.stretchEnd) {
+          this.applyCollisionRect(this.stretchStart, this.stretchEnd, true);
+          this.isStretching = false;
+          this.stretchStart = null;
+          this.stretchEnd = null;
         }
+        this.lastCollisionCell = null;
       }
     }
   }
@@ -321,6 +348,50 @@ export class TilemapEditor {
   private revertStroke(stroke: any, setTile: (x: number, y: number, tileId: number) => void): void {
     for (const change of stroke.changes) {
       setTile(change.x, change.y, change.oldTileId);
+    }
+  }
+
+  private applyCollisionRect(start: Vector2, end: Vector2, value: boolean): void {
+    const minX = Math.max(0, Math.min(start.x, end.x));
+    const maxX = Math.min(this.tilemap.width - 1, Math.max(start.x, end.x));
+    const minY = Math.max(0, Math.min(start.y, end.y));
+    const maxY = Math.min(this.tilemap.height - 1, Math.max(start.y, end.y));
+
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        this.tilemap.setCollision(x, y, value);
+      }
+    }
+  }
+
+  private applyCollisionPaint(from: Vector2 | null, toX: number, toY: number, value: boolean): void {
+    if (!from) {
+      this.tilemap.setCollision(toX, toY, value);
+      return;
+    }
+
+    let x0 = from.x;
+    let y0 = from.y;
+    const x1 = toX;
+    const y1 = toY;
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+
+    while (true) {
+      this.tilemap.setCollision(x0, y0, value);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy) {
+        err -= dy;
+        x0 += sx;
+      }
+      if (e2 < dx) {
+        err += dx;
+        y0 += sy;
+      }
     }
   }
 
@@ -386,6 +457,18 @@ export class TilemapEditor {
     // Render collision overlay (always show when enabled, or when collision tool is active)
     if ((this.showCollisionOverlay || this.currentTool === EditorTool.Collision) && this.collisionSystem) {
       this.collisionSystem.renderTilemapCollisionOverlay(renderer, this.tilemap, true);
+    }
+
+    if (this.currentTool === EditorTool.Collision && this.hoverCell) {
+      const ctx = renderer.getContext();
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        this.hoverCell.x * tileSize,
+        this.hoverCell.y * tileSize,
+        tileSize,
+        tileSize
+      );
     }
     
     // Note: Line preview would need worldPos from update method - can be added later

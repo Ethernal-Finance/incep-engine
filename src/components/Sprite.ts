@@ -2,6 +2,10 @@ export class Sprite {
   public imageName: string;
   public width: number;
   public height: number;
+  public frameWidth: number;
+  public frameHeight: number;
+  public frameIndex: number;
+  public frameRow: number;
   public offsetX: number;
   public offsetY: number;
   public visible: boolean;
@@ -19,6 +23,10 @@ export class Sprite {
     this.imageName = imageName;
     this.width = width;
     this.height = height;
+    this.frameWidth = width;
+    this.frameHeight = height;
+    this.frameIndex = 0;
+    this.frameRow = 0;
     this.offsetX = offsetX;
     this.offsetY = offsetY;
     this.visible = true;

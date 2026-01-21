@@ -229,9 +229,20 @@ export class CollisionSystem {
     
     const tileSize = tilemap.tileSize;
     const ctx = renderer.getContext();
-    
+
     for (let y = 0; y < tilemap.height; y++) {
       for (let x = 0; x < tilemap.width; x++) {
+        if (tilemap.getCollision && tilemap.getCollision(x, y)) {
+          const worldX = x * tileSize;
+          const worldY = y * tileSize;
+          ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+          ctx.fillRect(worldX, worldY, tileSize, tileSize);
+          ctx.strokeStyle = 'rgba(255, 0, 0, 0.9)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(worldX, worldY, tileSize, tileSize);
+          continue;
+        }
+
         // Get tile from first visible layer
         let tileId = 0;
         for (const layer of tilemap.layers) {

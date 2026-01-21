@@ -14,6 +14,7 @@ import { Enemy } from '../entities/Enemy';
 import { NPC } from '../entities/NPC';
 import { Item } from '../entities/Item';
 import { Transform } from '../components/Transform';
+import { Collider } from '../components/Collider';
 import { Vector2 } from '../utils/Vector2';
 import { Time } from '../engine/Time';
 
@@ -26,6 +27,13 @@ export class GameScene extends Scene {
   // private animationSystem: AnimationSystem; // Not used yet - requires animation states
   private combatSystem: CombatSystem;
   private playerEntity: Entity | null = null;
+  private walkFrameTime: number = 0;
+  private walkFrameIndex: number = 0;
+  private readonly walkFrameDuration: number = 0.08;
+  private walkFrameRow: number = 0;
+  private detectedFrameCounts: Map<string, number[]> = new Map();
+  private frameDetectCanvas: HTMLCanvasElement | null = null;
+  private frameDetectCtx: CanvasRenderingContext2D | null = null;
 
   constructor() {
     super('GameScene');
@@ -50,6 +58,10 @@ export class GameScene extends Scene {
 
     this.level = level;
     this.playerEntity = null;
+    this.walkFrameTime = 0;
+    this.walkFrameIndex = 0;
+    this.walkFrameRow = 0;
+    this.detectedFrameCounts.clear();
 
     // Create entities from level data
     for (const levelEntity of level.entities) {
@@ -77,6 +89,20 @@ export class GameScene extends Scene {
       if (entity && levelEntity.properties) {
         // Properties can be applied to components if needed
       }
+    }
+
+    if (this.level.spawnPoint) {
+      if (!this.playerEntity) {
+        this.playerEntity = Player.create(this.entitySystem, this.level.spawnPoint.x, this.level.spawnPoint.y);
+      } else {
+        const transform = this.playerEntity.getComponent<Transform>('transform');
+        if (transform) {
+          transform.position.x = this.level.spawnPoint.x;
+          transform.position.y = this.level.spawnPoint.y;
+        }
+      }
+    } else if (!this.playerEntity) {
+      this.playerEntity = Player.create(this.entitySystem, 0, 0);
     }
 
     // Set camera to follow player
@@ -113,6 +139,10 @@ export class GameScene extends Scene {
       }
     }
 
+    const playerTransform = this.playerEntity?.getComponent<Transform>('transform') || null;
+    const playerCollider = this.playerEntity?.getComponent<Collider>('collider') || null;
+    const prevPlayerPos = playerTransform ? playerTransform.position.copy() : null;
+
     // Update systems
     this.movementSystem.update(deltaTime);
     this.collisionSystem.update(deltaTime);
@@ -120,6 +150,138 @@ export class GameScene extends Scene {
     // this.animationSystem.update(deltaTime, []);
     this.combatSystem.update(deltaTime);
 
+    if (this.level && playerTransform && playerCollider && prevPlayerPos) {
+      playerCollider.setPosition(playerTransform.position.x, playerTransform.position.y);
+      if (this.isCollidingWithTilemap(playerCollider, this.level.tilemap)) {
+        playerTransform.position.x = prevPlayerPos.x;
+        playerTransform.position.y = prevPlayerPos.y;
+        playerCollider.setPosition(prevPlayerPos.x, prevPlayerPos.y);
+        const movement = this.playerEntity?.getComponent<any>('movement');
+        if (movement) {
+          movement.velocity.x = 0;
+          movement.velocity.y = 0;
+        }
+      }
+    }
+
+    // Drive walk animation from movement velocity
+    if (this.playerEntity) {
+      const movement = this.playerEntity.getComponent<any>('movement');
+      const sprite = this.playerEntity.getComponent<any>('sprite');
+      if (movement && sprite) {
+        const spriteImage = AssetLoader.getImage(sprite.imageName);
+        const frameCount = spriteImage
+          ? this.getFrameCountForSprite(sprite, spriteImage)
+          : 1;
+        const speed = movement.velocity.magnitude();
+        if (speed > 1) {
+          const absX = Math.abs(movement.velocity.x);
+          const absY = Math.abs(movement.velocity.y);
+          if (absX > absY) {
+            this.walkFrameRow = movement.velocity.x < 0 ? 1 : 3;
+          } else {
+            this.walkFrameRow = movement.velocity.y < 0 ? 0 : 2;
+          }
+          this.walkFrameTime += deltaTime;
+          while (this.walkFrameTime >= this.walkFrameDuration) {
+            this.walkFrameTime -= this.walkFrameDuration;
+            this.walkFrameIndex = (this.walkFrameIndex + 1) % frameCount;
+          }
+          sprite.frameIndex = this.walkFrameIndex;
+          sprite.frameRow = this.walkFrameRow;
+        } else {
+          this.walkFrameTime = 0;
+          this.walkFrameIndex = 0;
+          sprite.frameIndex = 0;
+          sprite.frameRow = this.walkFrameRow;
+        }
+      }
+    }
+
+  }
+
+  private isCollidingWithTilemap(collider: Collider, tilemap: Level['tilemap']): boolean {
+    const tileSize = tilemap.tileSize;
+    const minX = Math.floor(collider.bounds.x / tileSize);
+    const minY = Math.floor(collider.bounds.y / tileSize);
+    const maxX = Math.floor((collider.bounds.x + collider.bounds.width - 1) / tileSize);
+    const maxY = Math.floor((collider.bounds.y + collider.bounds.height - 1) / tileSize);
+
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (tilemap.getCollision(x, y)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private getFrameCountForSprite(sprite: any, spriteImage: HTMLImageElement): number {
+    const frameWidth = sprite.frameWidth || sprite.width;
+    const frameHeight = sprite.frameHeight || sprite.height;
+    const maxColumns = Math.max(1, Math.floor(spriteImage.width / frameWidth));
+    const maxRows = Math.max(1, Math.floor(spriteImage.height / frameHeight));
+    const row = Math.max(0, Math.min(sprite.frameRow || 0, maxRows - 1));
+    const cacheKey = `${sprite.imageName}:${frameWidth}:${frameHeight}`;
+    const cached = this.detectedFrameCounts.get(cacheKey);
+    if (cached && cached[row]) {
+      return cached[row];
+    }
+
+    const counts = cached || new Array(maxRows).fill(0);
+    const detected = this.detectFrameCount(spriteImage, frameWidth, frameHeight, row, maxColumns);
+    counts[row] = detected;
+    this.detectedFrameCounts.set(cacheKey, counts);
+    return detected;
+  }
+
+  private detectFrameCount(
+    spriteImage: HTMLImageElement,
+    frameWidth: number,
+    frameHeight: number,
+    row: number,
+    maxColumns: number
+  ): number {
+    if (!this.frameDetectCanvas) {
+      this.frameDetectCanvas = document.createElement('canvas');
+      this.frameDetectCtx = this.frameDetectCanvas.getContext('2d');
+    }
+    if (!this.frameDetectCtx || !this.frameDetectCanvas) {
+      return maxColumns;
+    }
+
+    this.frameDetectCanvas.width = frameWidth;
+    this.frameDetectCanvas.height = frameHeight;
+
+    let count = 0;
+    for (let col = 0; col < maxColumns; col++) {
+      this.frameDetectCtx.clearRect(0, 0, frameWidth, frameHeight);
+      this.frameDetectCtx.drawImage(
+        spriteImage,
+        col * frameWidth,
+        row * frameHeight,
+        frameWidth,
+        frameHeight,
+        0,
+        0,
+        frameWidth,
+        frameHeight
+      );
+      const data = this.frameDetectCtx.getImageData(0, 0, frameWidth, frameHeight).data;
+      let hasVisible = false;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] + data[i + 1] + data[i + 2] > 20) {
+          hasVisible = true;
+          break;
+        }
+      }
+      if (hasVisible) {
+        count++;
+      }
+    }
+
+    return count > 0 ? count : maxColumns;
   }
 
   render(renderer: Renderer): void {
@@ -211,17 +373,25 @@ export class GameScene extends Scene {
       if (spriteImage) {
         const ctx = renderer.getContext();
         ctx.globalAlpha = sprite.opacity || 1.0;
-        
+        const frameWidth = sprite.frameWidth || sprite.width;
+        const frameHeight = sprite.frameHeight || sprite.height;
+        const columns = Math.max(1, Math.floor(spriteImage.width / frameWidth));
+        const maxRow = Math.max(0, Math.floor(spriteImage.height / frameHeight) - 1);
+        const frameIndex = Math.max(0, Math.min(sprite.frameIndex || 0, columns - 1));
+        const frameRow = Math.max(0, Math.min(sprite.frameRow || 0, maxRow));
+        const sx = frameIndex * frameWidth;
+        const sy = frameRow * frameHeight;
+
         renderer.drawImage(
           spriteImage,
           x + sprite.offsetX,
           y + sprite.offsetY,
           sprite.width,
           sprite.height,
-          0,
-          0,
-          spriteImage.width,
-          spriteImage.height
+          sx,
+          sy,
+          frameWidth,
+          frameHeight
         );
         
         ctx.globalAlpha = 1.0;

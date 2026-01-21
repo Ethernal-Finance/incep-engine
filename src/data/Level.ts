@@ -13,6 +13,7 @@ export class Level {
   public name: string;
   public tilemap: Tilemap;
   public entities: LevelEntity[];
+  public spawnPoint: { x: number; y: number } | null;
 
   constructor(name: string = 'Level 1', version: string = '1.0') {
     this.version = version;
@@ -20,6 +21,7 @@ export class Level {
     // 50x50 grid to build full maps with tileset assets
     this.tilemap = new Tilemap(50, 50, 32);
     this.entities = [];
+    this.spawnPoint = null;
   }
 
   addEntity(entity: LevelEntity): void {
@@ -35,7 +37,8 @@ export class Level {
       version: this.version,
       name: this.name,
       tilemap: this.tilemap.toJSON(),
-      entities: this.entities
+      entities: this.entities,
+      spawnPoint: this.spawnPoint
     };
   }
 
@@ -43,6 +46,7 @@ export class Level {
     const level = new Level(data.name, data.version);
     level.tilemap = Tilemap.fromJSON(data.tilemap);
     level.entities = data.entities || [];
+    level.spawnPoint = data.spawnPoint || null;
     return level;
   }
 }

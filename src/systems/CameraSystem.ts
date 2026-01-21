@@ -4,7 +4,7 @@ import { Transform } from '../components/Transform';
 
 export class Camera {
   public position: Vector2;
-  public target: Vector2 | null = null;
+  public target: Vector2 | Transform | null = null;
   public zoom: number = 1;
   public smoothness: number = 0.1;
   public bounds: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
@@ -14,11 +14,7 @@ export class Camera {
   }
 
   setTarget(target: Vector2 | Transform): void {
-    if (target instanceof Transform) {
-      this.target = target.position.copy();
-    } else {
-      this.target = target.copy();
-    }
+    this.target = target;
   }
 
   setBounds(minX: number, minY: number, maxX: number, maxY: number): void {
@@ -27,8 +23,9 @@ export class Camera {
 
   update(deltaTime: number, viewportWidth: number, viewportHeight: number): void {
     if (this.target) {
-      const targetX = this.target.x - viewportWidth / 2 / this.zoom;
-      const targetY = this.target.y - viewportHeight / 2 / this.zoom;
+      const targetPos = this.target instanceof Transform ? this.target.position : this.target;
+      const targetX = targetPos.x;
+      const targetY = targetPos.y;
 
       // Smooth follow
       const lerpFactor = 1 - Math.pow(1 - this.smoothness, deltaTime * 60);

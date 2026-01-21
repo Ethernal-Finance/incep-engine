@@ -55,6 +55,7 @@ export class EditorUI {
           <button class="tool-btn" id="tool-erase" title="Erase (3)">Erase</button>
           <button class="tool-btn" id="tool-entity" title="Entity (4)">Entity</button>
           <button class="tool-btn" id="tool-collision" title="Collision (5)">Collision</button>
+          <button class="tool-btn" id="tool-spawn" title="Spawn (6)">Spawn</button>
         </div>
       </div>
       <div class="sidebar-section">
@@ -62,7 +63,10 @@ export class EditorUI {
         <select class="layer-select" id="layer-select">
           <option value="0">Layer 0</option>
         </select>
-        <button class="btn-small" id="btn-add-layer">Add Layer</button>
+        <div class="layer-buttons">
+          <button class="btn-small" id="btn-add-layer">Add Layer</button>
+          <button class="btn-small" id="btn-rename-layer">Rename Layer</button>
+        </div>
       </div>
       <div class="sidebar-section">
         <h3>Level</h3>
@@ -168,6 +172,7 @@ export class EditorUI {
     const eraseBtn = document.getElementById('tool-erase') as HTMLButtonElement;
     const entityBtn = document.getElementById('tool-entity') as HTMLButtonElement;
     const collisionBtn = document.getElementById('tool-collision') as HTMLButtonElement;
+    const spawnBtn = document.getElementById('tool-spawn') as HTMLButtonElement;
 
     if (selectBtn) {
       this.toolButtons.set(EditorTool.Select, selectBtn);
@@ -188,6 +193,10 @@ export class EditorUI {
     if (collisionBtn) {
       this.toolButtons.set(EditorTool.Collision, collisionBtn);
       collisionBtn.addEventListener('click', () => this.setTool(EditorTool.Collision));
+    }
+    if (spawnBtn) {
+      this.toolButtons.set(EditorTool.Spawn, spawnBtn);
+      spawnBtn.addEventListener('click', () => this.setTool(EditorTool.Spawn));
     }
   }
 
@@ -234,6 +243,10 @@ export class EditorUI {
 
   getAddLayerButton(): HTMLButtonElement | null {
     return document.getElementById('btn-add-layer') as HTMLButtonElement;
+  }
+
+  getRenameLayerButton(): HTMLButtonElement | null {
+    return document.getElementById('btn-rename-layer') as HTMLButtonElement;
   }
 
   updateLayerSelect(layers: Array<{ name: string; index: number }>, activeIndex: number): void {
