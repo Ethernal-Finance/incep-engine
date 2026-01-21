@@ -9,11 +9,22 @@ import { Camera } from '../systems/CameraSystem';
 import { Vector2 } from '../utils/Vector2';
 import { AssetLoader } from '../engine/AssetLoader';
 import { TilesetGenerator } from './TilesetGenerator';
+import { ViewControls } from './ViewControls';
+import { SelectionSystem } from './SelectionSystem';
+import { LayerSystem } from './LayerSystem';
+import { PaintingTools } from './PaintingTools';
+import { UndoSystem } from './UndoSystem';
+import { CollisionSystem } from './CollisionSystem';
 
 export enum EditorTool {
   Select = 'select',
   Paint = 'paint',
+  Brush = 'brush',
   Erase = 'erase',
+  FloodFill = 'floodfill',
+  Line = 'line',
+  Rectangle = 'rectangle',
+  Eyedropper = 'eyedropper',
   Entity = 'entity',
   Collision = 'collision'
 }
@@ -34,6 +45,14 @@ export class Editor {
   private tilemapEditor: TilemapEditor;
   private entityPlacer: EntityPlacer;
   private _propertyInspector: PropertyInspector;
+  
+  // New systems
+  private viewControls: ViewControls;
+  private selectionSystem: SelectionSystem;
+  private layerSystem: LayerSystem;
+  private paintingTools: PaintingTools;
+  private undoSystem: UndoSystem;
+  private collisionSystem: CollisionSystem;
 
   constructor(canvas: HTMLCanvasElement) {
     this.game = new Game(canvas);
@@ -47,7 +66,20 @@ export class Editor {
     
     this.updateGridMetrics();
     
-    this.tilemapEditor = new TilemapEditor(this.currentLevel.tilemap);
+    // Initialize new systems
+    this.viewControls = new ViewControls();
+    this.selectionSystem = new SelectionSystem();
+    this.layerSystem = new LayerSystem();
+    this.paintingTools = new PaintingTools();
+    this.undoSystem = new UndoSystem();
+    this.collisionSystem = new CollisionSystem();
+    
+    // Set layout boundary
+    const gridWidth = this.currentLevel.tilemap.width * this.currentLevel.tilemap.tileSize;
+    const gridHeight = this.currentLevel.tilemap.height * this.currentLevel.tilemap.tileSize;
+    this.viewControls.setLayoutBoundary({ x: 0, y: 0, width: gridWidth, height: gridHeight });
+    
+    this.tilemapEditor = new TilemapEditor(this.currentLevel.tilemap, this.undoSystem, this.collisionSystem);
     this.entityPlacer = new EntityPlacer(this.currentLevel);
     this._propertyInspector = new PropertyInspector();
     this.setupUI();
@@ -105,12 +137,46 @@ export class Editor {
   }
 
   setZoom(zoom: number): void {
+    this.viewControls.setTargetZoom(zoom);
     this.zoom = Math.max(0.1, Math.min(5, zoom));
     this.camera.zoom = this.zoom;
   }
 
   getZoom(): number {
-    return this.zoom;
+    return this.viewControls.getCurrentZoom();
+  }
+  
+  // New system getters
+  getViewControls(): ViewControls {
+    return this.viewControls;
+  }
+  
+  getSelectionSystem(): SelectionSystem {
+    return this.selectionSystem;
+  }
+  
+  getLayerSystem(): LayerSystem {
+    return this.layerSystem;
+  }
+  
+  getPaintingTools(): PaintingTools {
+    return this.paintingTools;
+  }
+  
+  getUndoSystem(): UndoSystem {
+    return this.undoSystem;
+  }
+  
+  getCollisionSystem(): CollisionSystem {
+    return this.collisionSystem;
+  }
+  
+  getGridOffset(): Vector2 {
+    return this.gridOffset.copy();
+  }
+  
+  setGridOffset(offset: Vector2): void {
+    this.gridOffset = offset.copy();
   }
 
   update(deltaTime: number): void {
@@ -120,20 +186,35 @@ export class Editor {
     const mouseButton = Input.getMouseButton(0);
     
     this.mousePosition = Input.getMousePosition();
+    
+    // Update smooth zoom
+    this.zoom = this.viewControls.updateZoom(deltaTime);
+    this.camera.zoom = this.zoom;
 
-    // Handle panning
-    if (Input.getMouseButton(2)) {
-      // Middle mouse button
-      if (!this.panning) {
-        this.panning = true;
-        this.panStart = this.mousePosition.copy();
-      } else {
-        const delta = Vector2.subtract(this.panStart, this.mousePosition);
-        this.gridOffset.add(Vector2.multiply(delta, 1 / this.zoom));
-        this.panStart = this.mousePosition.copy();
+    // Handle panning (middle mouse or space + drag)
+    if (Input.getMouseButton(2) || (Input.getKey(' ') && mouseButton)) {
+      if (Input.getKey(' ') && mouseButton) {
+        // Space + drag panning
+        if (!this.viewControls.isSpacePanning()) {
+          this.viewControls.startSpacePan(this.mousePosition);
+        }
+        this.gridOffset = this.viewControls.updateSpacePan(this.mousePosition, this.gridOffset, this.zoom);
+      } else if (Input.getMouseButton(2)) {
+        // Middle mouse button
+        if (!this.panning) {
+          this.panning = true;
+          this.panStart = this.mousePosition.copy();
+        } else {
+          const delta = Vector2.subtract(this.panStart, this.mousePosition);
+          this.gridOffset.add(Vector2.multiply(delta, 1 / this.zoom));
+          this.panStart = this.mousePosition.copy();
+        }
       }
     } else {
       this.panning = false;
+      if (this.viewControls.isSpacePanning()) {
+        this.viewControls.stopSpacePan();
+      }
     }
 
     // Update tools - convert screen to world coordinates accounting for centered grid
@@ -161,21 +242,71 @@ export class Editor {
       console.log(`✓ Mouse click detected! Tool: ${this.currentTool}, WorldPos: (${worldPos.x.toFixed(1)}, ${worldPos.y.toFixed(1)}), ScreenPos: (${this.mousePosition.x}, ${this.mousePosition.y})`);
     }
     
-    if (this.currentTool === EditorTool.Paint || this.currentTool === EditorTool.Erase || this.currentTool === EditorTool.Collision) {
+    // Handle keyboard shortcuts
+    if (Input.getKeyDown('z') && (Input.getKey('Control') || Input.getKey('Meta'))) {
+      if (Input.getKey('Shift')) {
+        this.undoSystem.redo();
+      } else {
+        this.undoSystem.undo();
+      }
+    }
+    
+    // Handle arrow key nudging for selection
+    if (this.currentTool === EditorTool.Select) {
+      const nudgeDir = new Vector2(0, 0);
+      if (Input.getKeyDown('ArrowLeft')) nudgeDir.x = -1;
+      if (Input.getKeyDown('ArrowRight')) nudgeDir.x = 1;
+      if (Input.getKeyDown('ArrowUp')) nudgeDir.y = -1;
+      if (Input.getKeyDown('ArrowDown')) nudgeDir.y = 1;
+      
+      if (nudgeDir.x !== 0 || nudgeDir.y !== 0) {
+        const gridStep = this.viewControls.getSettings().gridSize;
+        const useGrid = this.viewControls.getSettings().snapToGrid;
+        this.selectionSystem.nudge(nudgeDir, gridStep, useGrid);
+      }
+    }
+    
+    if (this.currentTool === EditorTool.Paint || this.currentTool === EditorTool.Erase || this.currentTool === EditorTool.Collision || 
+        this.currentTool === EditorTool.Brush || this.currentTool === EditorTool.FloodFill || this.currentTool === EditorTool.Line || 
+        this.currentTool === EditorTool.Rectangle || this.currentTool === EditorTool.Eyedropper) {
       // Pass mouse button state to tilemap editor
       this.tilemapEditor.update(deltaTime, worldPos, this.camera, this.zoom, viewportWidth, viewportHeight, mouseButtonDown, mouseButton);
     } else if (this.currentTool === EditorTool.Entity) {
       this.entityPlacer.update(deltaTime, worldPos, this.camera, this.zoom, viewportWidth, viewportHeight);
+    } else if (this.currentTool === EditorTool.Select) {
+      // Handle selection
+      if (mouseButtonDown) {
+        const shiftKey = Input.getKey('Shift');
+        this.selectionSystem.selectAtPoint(worldPos, shiftKey);
+      }
+      
+      if (Input.getMouseButton(0) && !mouseButtonDown) {
+        // Box select
+        if (!this.selectionSystem.isBoxSelectingActive()) {
+          const shiftKey = Input.getKey('Shift');
+          this.selectionSystem.startBoxSelect(worldPos, shiftKey);
+        } else {
+          this.selectionSystem.updateBoxSelect(worldPos);
+        }
+      }
+      
+      if (Input.getMouseButtonUp(0)) {
+        this.selectionSystem.endBoxSelect();
+      }
     }
   }
 
   render(): void {
     this.renderer.clear('#2a2a2a');
 
-    // Apply camera transform - center the grid
-    this.renderer.save();
     const viewportWidth = this.renderer.getWidth();
     const viewportHeight = this.renderer.getHeight();
+    
+    // Render rulers (before transform)
+    this.viewControls.renderRulers(this.renderer, this.gridOffset, this.zoom, viewportWidth, viewportHeight);
+
+    // Apply camera transform - center the grid
+    this.renderer.save();
     
     // Center the grid in the viewport
     const centerX = viewportWidth / 2;
@@ -185,16 +316,39 @@ export class Editor {
     this.renderer.scale(this.zoom, this.zoom);
     this.renderer.translate(this.gridOffset.x, this.gridOffset.y);
 
+    // Render layout boundary
+    this.viewControls.renderLayoutBoundary(this.renderer, this.gridOffset, this.zoom, viewportWidth, viewportHeight);
+
+    // Render grid overlay
+    this.viewControls.renderGrid(this.renderer, this.gridOffset, this.zoom, viewportWidth, viewportHeight, this.currentLevel.tilemap.tileSize);
+
     // Render tilemap
     this.tilemapEditor.render(this.renderer);
 
     // Render entities
     this.entityPlacer.render(this.renderer);
+    
+    // Render selection and transform handles
+    this.selectionSystem.render(this.renderer, this.zoom);
 
-    // Render grid within the tilemap area
+    // Render grid boundary (legacy)
     this.renderGrid();
 
     this.renderer.restore();
+    
+    // Render minimap (after transform)
+    const gridWidth = this.currentLevel.tilemap.width * this.currentLevel.tilemap.tileSize;
+    const gridHeight = this.currentLevel.tilemap.height * this.currentLevel.tilemap.tileSize;
+    this.viewControls.renderMinimap(
+      this.renderer,
+      viewportWidth,
+      viewportHeight,
+      gridWidth,
+      gridHeight,
+      this.gridOffset.x,
+      this.gridOffset.y,
+      this.zoom
+    );
   }
 
   private renderGrid(): void {
@@ -246,7 +400,7 @@ export class Editor {
 
   loadLevel(level: Level): void {
     this.currentLevel = level;
-    this.tilemapEditor = new TilemapEditor(level.tilemap);
+    this.tilemapEditor = new TilemapEditor(level.tilemap, this.undoSystem, this.collisionSystem);
     this.entityPlacer = new EntityPlacer(level);
     this.updateGridMetrics();
   }

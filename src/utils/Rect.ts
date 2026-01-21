@@ -66,5 +66,17 @@ export class Rect {
   copy(): Rect {
     return new Rect(this.x, this.y, this.width, this.height);
   }
+
+  containsPoint(point: Vector2): boolean {
+    return this.contains(point);
+  }
+
+  static fromPoints(p1: Vector2, p2: Vector2): Rect {
+    const minX = Math.min(p1.x, p2.x);
+    const minY = Math.min(p1.y, p2.y);
+    const maxX = Math.max(p1.x, p2.x);
+    const maxY = Math.max(p1.y, p2.y);
+    return new Rect(minX, minY, maxX - minX, maxY - minY);
+  }
 }
 

@@ -5,6 +5,7 @@ import { Time } from '../engine/Time';
 import { Level } from '../data/Level';
 import { Game } from '../engine/Game';
 import { GameScene } from '../runtime/GameScene';
+import { Vector2 } from '../utils/Vector2';
 
 class EditorApp {
   private editor: Editor;
@@ -228,6 +229,7 @@ class EditorApp {
         return; // Don't interfere with text input
       }
       
+      // Tool shortcuts
       if (e.key === '1') {
         this.editor.setTool(EditorTool.Select);
         this.editorUI.setTool(EditorTool.Select);
@@ -243,6 +245,33 @@ class EditorApp {
       } else if (e.key === '5') {
         this.editor.setTool(EditorTool.Collision);
         this.editorUI.setTool(EditorTool.Collision);
+      } else if (e.key === 'B' && !e.shiftKey) {
+        this.editor.setTool(EditorTool.Brush);
+        this.editorUI.setTool(EditorTool.Brush);
+      } else if (e.key === 'F') {
+        this.editor.setTool(EditorTool.FloodFill);
+        this.editorUI.setTool(EditorTool.FloodFill);
+      } else if (e.key === 'L') {
+        this.editor.setTool(EditorTool.Line);
+        this.editorUI.setTool(EditorTool.Line);
+      } else if (e.key === 'I' || (e.key === 'D' && e.altKey)) {
+        this.editor.setTool(EditorTool.Eyedropper);
+        this.editorUI.setTool(EditorTool.Eyedropper);
+      }
+      
+      // Undo/Redo
+      if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          this.editor.getUndoSystem().redo();
+        } else {
+          this.editor.getUndoSystem().undo();
+        }
+      }
+      
+      // Escape to clear selection
+      if (e.key === 'Escape') {
+        this.editor.getSelectionSystem().clearSelection();
       }
     });
 
@@ -269,13 +298,20 @@ class EditorApp {
       });
     }
 
-    // Mouse wheel zoom
+    // Mouse wheel zoom (centered on cursor)
     const canvas = this.editorUI.getCanvas();
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      const viewControls = this.editor.getViewControls();
+      const mousePos = Input.getMousePosition();
+      const viewportWidth = canvas.width;
+      const viewportHeight = canvas.height;
+      const gridOffset = this.editor.getGridOffset();
       const currentZoom = this.editor.getZoom();
-      this.editor.setZoom(currentZoom * delta);
+      
+      const result = viewControls.zoomAtPoint(currentZoom, e.deltaY, mousePos, viewportWidth, viewportHeight, gridOffset);
+      this.editor.setZoom(result.newZoom);
+      this.editor.setGridOffset(result.newOffset);
     });
 
     // Update loop for status bar
