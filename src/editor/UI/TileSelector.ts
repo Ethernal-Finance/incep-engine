@@ -146,6 +146,8 @@ export class TileSelector {
       return;
     }
 
+    const availableTileset = this.assetManager.getAvailableTilesets().find((tileset) => tileset.path === tilesetName);
+
     // Get tileset info
     let tileSize = 32;
     let cols = 8;
@@ -155,6 +157,10 @@ export class TileSelector {
       tileSize = this.currentTilesetInfo.tileSize;
       cols = this.currentTilesetInfo.columns;
       rows = this.currentTilesetInfo.rows;
+    } else if (availableTileset) {
+      tileSize = availableTileset.tileSize;
+      cols = availableTileset.columns;
+      rows = availableTileset.rows;
     } else if (tilesetName === 'default-tileset') {
       // Default tileset info
       tileSize = 32;
@@ -235,6 +241,20 @@ export class TileSelector {
 
     this.tilePreview.innerHTML = '';
     this.tilePreview.appendChild(canvas);
+
+    const tilesetInfo: TilesetInfo = {
+      name: availableTileset?.name ?? (tilesetName === 'default-tileset' ? 'Default Tileset' : tilesetName),
+      path: tilesetName,
+      tileSize,
+      columns: cols,
+      rows
+    };
+
+    const tilesetChanged = this.currentTilesetInfo?.path !== tilesetName;
+    this.currentTilesetInfo = tilesetInfo;
+    if (tilesetChanged && this.onTilesetChanged) {
+      this.onTilesetChanged(tilesetInfo);
+    }
   }
 
   selectTile(tileId: number): void {
