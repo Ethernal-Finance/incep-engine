@@ -17,8 +17,8 @@ export class Level {
   constructor(name: string = 'Level 1', version: string = '1.0') {
     this.version = version;
     this.name = name;
-    // 256x256 grid = 8x8 tiles with 32px each
-    this.tilemap = new Tilemap(8, 8, 32);
+    // 50x50 grid to build full maps with tileset assets
+    this.tilemap = new Tilemap(50, 50, 32);
     this.entities = [];
   }
 
@@ -46,4 +46,3 @@ export class Level {
     return level;
   }
 }
-
