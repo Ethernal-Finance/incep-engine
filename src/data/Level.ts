@@ -17,7 +17,8 @@ export class Level {
   constructor(name: string = 'Level 1', version: string = '1.0') {
     this.version = version;
     this.name = name;
-    this.tilemap = new Tilemap(50, 50, 32);
+    // 256x256 grid = 8x8 tiles with 32px each
+    this.tilemap = new Tilemap(8, 8, 32);
     this.entities = [];
   }
 

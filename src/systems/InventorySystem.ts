@@ -2,7 +2,7 @@ import { EntitySystem, Entity } from './EntitySystem';
 import { Inventory } from '../components/Inventory';
 
 export class InventorySystem {
-  constructor(private entitySystem: EntitySystem) {}
+  constructor(_entitySystem: EntitySystem) {}
 
   addItem(entity: Entity, item: any): boolean {
     const inventory = entity.getComponent<Inventory>('inventory');

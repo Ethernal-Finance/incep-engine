@@ -5,7 +5,7 @@ import { Input } from '../engine/Input';
 export class DialogueSystem {
   private activeDialogue: Dialogue | null = null;
 
-  constructor(private entitySystem: EntitySystem) {}
+  constructor(_entitySystem: EntitySystem) {}
 
   startDialogue(entity: Entity): void {
     const dialogue = entity.getComponent<Dialogue>('dialogue');
@@ -16,7 +16,7 @@ export class DialogueSystem {
     }
   }
 
-  update(deltaTime: number): void {
+  update(_deltaTime: number): void {
     if (!this.activeDialogue || !this.activeDialogue.isActive) {
       this.activeDialogue = null;
       return;

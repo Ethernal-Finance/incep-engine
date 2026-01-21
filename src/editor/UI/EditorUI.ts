@@ -1,10 +1,13 @@
+import { TileSelector } from './TileSelector';
+
 export class EditorUI {
   private container: HTMLElement;
-  private topBar: HTMLElement;
-  private canvasContainer: HTMLElement;
-  private sidebar: HTMLElement;
-  private statusBar: HTMLElement;
-  private tabs: HTMLElement;
+  private topBar!: HTMLElement;
+  private canvasContainer!: HTMLElement;
+  private sidebar!: HTMLElement;
+  private statusBar!: HTMLElement;
+  private tabs!: HTMLElement;
+  private tileSelector!: TileSelector;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -75,6 +78,13 @@ export class EditorUI {
     // Initialize tabs
     this.tabs = document.getElementById('tabs-container')!;
     this.addTab('Layout 1', true);
+
+    // Initialize tile selector
+    this.tileSelector = new TileSelector(this.sidebar);
+  }
+
+  getTileSelector(): TileSelector {
+    return this.tileSelector;
   }
 
   addTab(name: string, active: boolean = false): void {
@@ -109,7 +119,11 @@ export class EditorUI {
   }
 
   getCanvas(): HTMLCanvasElement {
-    return document.getElementById('editor-canvas') as HTMLCanvasElement;
+    const canvas = document.getElementById('editor-canvas') as HTMLCanvasElement;
+    if (!canvas) {
+      throw new Error('Canvas element not found');
+    }
+    return canvas;
   }
 }
 

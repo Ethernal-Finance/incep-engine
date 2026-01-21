@@ -70,7 +70,7 @@ export class EntitySystem {
     return this.getAllEntities().filter((e) => e.hasComponent(componentType));
   }
 
-  update(deltaTime: number): void {
+  update(_deltaTime: number): void {
     // Systems will update entities
   }
 }

@@ -3,11 +3,9 @@ import { Renderer } from '../engine/Renderer';
 import { Input } from '../engine/Input';
 import { Camera } from '../systems/CameraSystem';
 import { Vector2 } from '../utils/Vector2';
-import { AssetLoader } from '../engine/AssetLoader';
 
 export class EntityPlacer {
   private selectedEntityType: string = 'player';
-  private placing: boolean = false;
   private selectedEntity: LevelEntity | null = null;
 
   constructor(private level: Level) {}
@@ -20,7 +18,7 @@ export class EntityPlacer {
     return this.selectedEntityType;
   }
 
-  update(deltaTime: number, mousePos: Vector2, camera: Camera, zoom: number, viewportWidth: number, viewportHeight: number): void {
+  update(_deltaTime: number, mousePos: Vector2, camera: Camera, _zoom: number, viewportWidth: number, viewportHeight: number): void {
     const worldPos = camera.screenToWorld(mousePos, viewportWidth, viewportHeight);
 
     if (Input.getMouseButtonDown(0)) {

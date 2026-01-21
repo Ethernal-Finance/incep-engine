@@ -34,6 +34,25 @@ class EditorApp {
     window.addEventListener('resize', resizeCanvas);
 
     this.editor = new Editor(canvas);
+    
+    // Connect tile selector to editor
+    const tileSelector = this.editorUI.getTileSelector();
+    tileSelector.setOnTileSelected((tileId) => {
+      this.editor.getTilemapEditor().setSelectedTile(tileId);
+    });
+    
+    tileSelector.setOnTilesetChanged((info) => {
+      // Update tilemap with new tileset info
+      const level = this.editor.getLevel();
+      level.tilemap.tilesetImage = info.path;
+      level.tilemap.tilesetColumns = info.columns;
+      level.tilemap.tilesetRows = info.rows;
+      level.tilemap.tileSize = info.tileSize;
+    });
+    
+    // Set default tool to Paint
+    this.editor.setTool('paint' as any);
+    
     this.setupEventListeners();
     this.start();
   }
@@ -51,8 +70,6 @@ class EditorApp {
     const playBtn = document.getElementById('btn-play');
     const stopBtn = document.getElementById('btn-stop');
     const pauseBtn = document.getElementById('btn-pause');
-    const undoBtn = document.getElementById('btn-undo');
-    const redoBtn = document.getElementById('btn-redo');
 
     if (playBtn) {
       playBtn.addEventListener('click', () => {

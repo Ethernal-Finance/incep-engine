@@ -1,5 +1,5 @@
 export class AssetLoader {
-  private static images: Map<string, HTMLImageElement> = new Map();
+  public static images: Map<string, HTMLImageElement> = new Map();
   private static loaded: boolean = false;
 
   static async loadImage(path: string, name: string): Promise<void> {

@@ -38,9 +38,6 @@ export class Camera {
 
     // Apply bounds
     if (this.bounds) {
-      const halfWidth = viewportWidth / 2 / this.zoom;
-      const halfHeight = viewportHeight / 2 / this.zoom;
-
       this.position.x = MathUtils.clamp(
         this.position.x,
         this.bounds.minX,

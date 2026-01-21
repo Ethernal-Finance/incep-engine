@@ -1,9 +1,6 @@
-import { Vector2 } from '../utils/Vector2';
-
 export class Renderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
-  private layers: Map<string, CanvasRenderingContext2D> = new Map();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;

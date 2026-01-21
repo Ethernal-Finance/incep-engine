@@ -2,7 +2,6 @@ import { EntitySystem, Entity } from './EntitySystem';
 import { Movement } from '../components/Movement';
 import { Transform } from '../components/Transform';
 import { Vector2 } from '../utils/Vector2';
-import { MathUtils } from '../utils/Math';
 
 export class MovementSystem {
   constructor(private entitySystem: EntitySystem) {}

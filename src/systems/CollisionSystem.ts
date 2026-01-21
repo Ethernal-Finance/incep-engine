@@ -1,12 +1,11 @@
 import { EntitySystem, Entity } from './EntitySystem';
-import { Collider, CollisionLayer } from '../components/Collider';
+import { Collider } from '../components/Collider';
 import { Transform } from '../components/Transform';
-import { Rect } from '../utils/Rect';
 
 export class CollisionSystem {
   constructor(private entitySystem: EntitySystem) {}
 
-  update(deltaTime: number): void {
+  update(_deltaTime: number): void {
     const entities = this.entitySystem.getEntitiesWithComponent('collider');
     const colliders: Array<{ entity: Entity; collider: Collider; transform: Transform }> = [];
 
@@ -46,13 +45,7 @@ export class CollisionSystem {
     return a.bounds.intersects(b.bounds);
   }
 
-  checkTileCollision(collider: Collider, tilemap: any, tileSize: number): boolean {
-    const bounds = collider.bounds;
-    const minTileX = Math.floor(bounds.left / tileSize);
-    const maxTileX = Math.floor(bounds.right / tileSize);
-    const minTileY = Math.floor(bounds.top / tileSize);
-    const maxTileY = Math.floor(bounds.bottom / tileSize);
-
+  checkTileCollision(_collider: Collider, _tilemap: any, _tileSize: number): boolean {
     // This would check against tilemap collision data
     // Implementation depends on tilemap structure
     return false;

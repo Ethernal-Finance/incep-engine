@@ -3,8 +3,6 @@ import { Scene } from './engine/Scene';
 import { Renderer } from './engine/Renderer';
 
 class GameScene extends Scene {
-  private renderer: Renderer;
-
   constructor() {
     super('GameScene');
   }
@@ -13,12 +11,11 @@ class GameScene extends Scene {
     // Initialize game scene
   }
 
-  update(deltaTime: number): void {
+  update(_deltaTime: number): void {
     // Update game logic
   }
 
   render(renderer: Renderer): void {
-    this.renderer = renderer;
     // Render game
     renderer.fillText('Game Scene', 100, 100, '#ffffff');
   }

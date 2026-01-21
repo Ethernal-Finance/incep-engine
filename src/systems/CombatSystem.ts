@@ -4,7 +4,7 @@ import { Transform } from '../components/Transform';
 import { Vector2 } from '../utils/Vector2';
 
 export class CombatSystem {
-  constructor(private entitySystem: EntitySystem) {}
+  constructor(_entitySystem: EntitySystem) {}
 
   damageEntity(entity: Entity, amount: number): void {
     const health = entity.getComponent<Health>('health');
@@ -33,7 +33,7 @@ export class CombatSystem {
     this.damageEntity(target, damage);
   }
 
-  update(deltaTime: number): void {
+  update(_deltaTime: number): void {
     // Handle combat logic, cooldowns, etc.
   }
 }
