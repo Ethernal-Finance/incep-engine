@@ -60,8 +60,20 @@ export class TilemapEditor {
   }
 
   setSelectedTile(tileId: number): void {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TilemapEditor.ts:62',message:'setSelectedTile called',data:{tileId,currentSelectedTile:this.selectedTile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     this.selectedTile = tileId;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TilemapEditor.ts:64',message:'Setting stamp manager tile',data:{tileId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     this.paintingTools.getStampManager().setSingleTile(tileId);
+  }
+
+  setSelectedStamp(tileIds: number[], width: number, height: number): void {
+    if (!tileIds.length) return;
+    this.selectedTile = tileIds[0];
+    this.paintingTools.getStampManager().setMultiTileStamp(tileIds, width, height);
   }
 
   getSelectedTile(): number {
@@ -107,9 +119,18 @@ export class TilemapEditor {
 
     // Handle Paint/Brush tools
     if (this.currentTool === EditorTool.Paint || this.currentTool === EditorTool.Brush) {
+      // #region agent log
+      if (mouseButtonDown) {
+        fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TilemapEditor.ts:109',message:'Paint tool mouse down',data:{tool:this.currentTool,paintMode:this.paintMode,selectedTile:this.selectedTile,clampedX,clampedY},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      }
+      // #endregion
       if (mouseButtonDown) {
         if (this.paintMode === 'brush') {
           // Start brush stroke
+          // #region agent log
+          const stampBefore = this.paintingTools.getStampManager().getCurrentStamp();
+          fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TilemapEditor.ts:113',message:'Starting brush stroke',data:{stampTileIds:stampBefore.tileIds,stampWidth:stampBefore.width,stampHeight:stampBefore.height,clampedX,clampedY},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+          // #endregion
           this.currentStroke = this.paintingTools.startBrushStroke(
             activeLayer.name,
             clampedX,

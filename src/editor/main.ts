@@ -47,6 +47,9 @@ class EditorApp {
     tileSelector.setOnTileSelected((tileId) => {
       this.editor.getTilemapEditor().setSelectedTile(tileId);
     });
+    tileSelector.setOnStampSelected((tileIds, width, height) => {
+      this.editor.getTilemapEditor().setSelectedStamp(tileIds, width, height);
+    });
     
     tileSelector.setOnTilesetChanged((info) => {
       // Update tilemap with new tileset info
@@ -64,10 +67,9 @@ class EditorApp {
       this.editor.setTool(tool);
     });
     
-    // Set default tool to Paint (this will also update UI)
+    // Set default tool to Paint (this will also update the editor via callback)
     console.log('Setting default tool to Paint...');
     this.editorUI.setTool(EditorTool.Paint);
-    this.editor.setTool(EditorTool.Paint);
     console.log('Default tool set to Paint');
     
     // Wire layer selector
@@ -231,31 +233,22 @@ class EditorApp {
       
       // Tool shortcuts
       if (e.key === '1') {
-        this.editor.setTool(EditorTool.Select);
         this.editorUI.setTool(EditorTool.Select);
       } else if (e.key === '2') {
-        this.editor.setTool(EditorTool.Paint);
         this.editorUI.setTool(EditorTool.Paint);
       } else if (e.key === '3') {
-        this.editor.setTool(EditorTool.Erase);
         this.editorUI.setTool(EditorTool.Erase);
       } else if (e.key === '4') {
-        this.editor.setTool(EditorTool.Entity);
         this.editorUI.setTool(EditorTool.Entity);
       } else if (e.key === '5') {
-        this.editor.setTool(EditorTool.Collision);
         this.editorUI.setTool(EditorTool.Collision);
       } else if (e.key === 'B' && !e.shiftKey) {
-        this.editor.setTool(EditorTool.Brush);
         this.editorUI.setTool(EditorTool.Brush);
       } else if (e.key === 'F') {
-        this.editor.setTool(EditorTool.FloodFill);
         this.editorUI.setTool(EditorTool.FloodFill);
       } else if (e.key === 'L') {
-        this.editor.setTool(EditorTool.Line);
         this.editorUI.setTool(EditorTool.Line);
       } else if (e.key === 'I' || (e.key === 'D' && e.altKey)) {
-        this.editor.setTool(EditorTool.Eyedropper);
         this.editorUI.setTool(EditorTool.Eyedropper);
       }
       
@@ -333,9 +326,10 @@ class EditorApp {
     // Runtime mode uses Game's own loop
     if (!this.runtimeMode) {
       Time.update();
-      Input.update();
       this.editor.update(Time.getDeltaTime());
       this.editor.render();
+      // Clear per-frame input after the editor consumes it.
+      Input.update();
     }
 
     requestAnimationFrame(this.gameLoop);

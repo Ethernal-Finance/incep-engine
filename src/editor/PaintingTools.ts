@@ -50,6 +50,9 @@ export class PaintingTools {
     if (!this.currentStroke) return;
     
     const stamp = this.stampManager.getCurrentStamp();
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PaintingTools.ts:49',message:'paintAtCell called',data:{tileX,tileY,stampTileIds:stamp.tileIds,stampWidth:stamp.width,stampHeight:stamp.height},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
     const cellKey = `${tileX},${tileY}`;
     
     // Paint stamp pattern
@@ -64,9 +67,17 @@ export class PaintingTools {
         
         const oldTileId = getTile(x, y);
         const newTileId = this.stampManager.getTileIdAt(sx, sy);
+        // #region agent log
+        if (sx === 0 && sy === 0) {
+          fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PaintingTools.ts:66',message:'About to set tile',data:{x,y,oldTileId,newTileId,stampX:sx,stampY:sy},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        }
+        // #endregion
         
         if (oldTileId !== newTileId) {
           setTile(x, y, newTileId);
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PaintingTools.ts:69',message:'Tile set called',data:{x,y,newTileId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+          // #endregion
           this.currentStroke.changes.push({ x, y, oldTileId, newTileId });
         }
       }

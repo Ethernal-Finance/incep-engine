@@ -165,7 +165,7 @@ body {
 
 /* Sidebar */
 .editor-sidebar {
-  width: 280px;
+  width: var(--sidebar-width, 280px);
   background: #2a2a2a;
   border-left: 1px solid #3a3a3a;
   padding: 16px;
@@ -174,6 +174,21 @@ body {
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.sidebar-resizer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  background: rgba(255, 255, 255, 0.02);
+  z-index: 1;
+}
+
+.sidebar-resizer:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .sidebar-section {
@@ -219,6 +234,19 @@ body {
 .tileset-select:focus {
   outline: none;
   border-color: #5a5a5a;
+}
+
+.tile-zoom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #b0b0b0;
+}
+
+.tile-zoom input[type="range"] {
+  flex: 1;
 }
 
 .tile-preview {
@@ -285,13 +313,13 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  right: 280px;
+  right: var(--sidebar-width, 280px);
   z-index: 100;
 }
 
 .editor-canvas-container {
   margin-top: 48px;
-  margin-right: 280px;
+  margin-right: var(--sidebar-width, 280px);
   margin-bottom: 32px;
 }
 
@@ -299,7 +327,7 @@ body {
   position: absolute;
   bottom: 0;
   left: 0;
-  right: 280px;
+  right: var(--sidebar-width, 280px);
   z-index: 100;
 }
 

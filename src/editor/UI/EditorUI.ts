@@ -11,6 +11,8 @@ export class EditorUI {
   private tileSelector!: TileSelector;
   private toolButtons: Map<EditorTool, HTMLButtonElement> = new Map();
   private onToolChanged?: (tool: EditorTool) => void;
+  private readonly minSidebarWidth = 200;
+  private readonly maxSidebarWidth = 520;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -33,11 +35,7 @@ export class EditorUI {
         </div>
         <div class="tabs-container" id="tabs-container"></div>
       </div>
-      <div class="top-bar-right">
-        <button class="btn-buy">Buy now</button>
-        <span class="edition-label">Free edition</span>
-        <span class="username">Ethernaldev</span>
-      </div>
+      <div class="top-bar-right"></div>
     `;
 
     // Canvas container
@@ -83,6 +81,10 @@ export class EditorUI {
         <select class="tileset-select" id="tileset-select">
           <option>Select a tileset...</option>
         </select>
+        <div class="tile-zoom">
+          <label for="tile-zoom-range">Zoom</label>
+          <input type="range" id="tile-zoom-range" min="50" max="200" value="100">
+        </div>
         <div class="tile-preview" id="tile-preview"></div>
         <div class="tile-info">No tile selected</div>
       </div>
@@ -103,6 +105,8 @@ export class EditorUI {
     this.container.appendChild(this.sidebar);
     this.container.appendChild(this.statusBar);
 
+    this.setupSidebarResize();
+
     // Initialize tabs
     this.tabs = document.getElementById('tabs-container')!;
     this.addTab('Layout 1', true);
@@ -112,6 +116,50 @@ export class EditorUI {
     
     // Initialize tool buttons
     this.setupToolButtons();
+  }
+
+  private setupSidebarResize(): void {
+    const resizer = document.createElement('div');
+    resizer.className = 'sidebar-resizer';
+    this.sidebar.prepend(resizer);
+
+    const setSidebarWidth = (width: number) => {
+      const clamped = Math.min(this.maxSidebarWidth, Math.max(this.minSidebarWidth, width));
+      document.documentElement.style.setProperty('--sidebar-width', `${clamped}px`);
+    };
+
+    const initialWidth = this.sidebar.getBoundingClientRect().width || 280;
+    setSidebarWidth(initialWidth);
+
+    let isDragging = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (!isDragging) return;
+      const delta = startX - event.clientX;
+      setSidebarWidth(startWidth + delta);
+    };
+
+    const onPointerUp = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+
+    resizer.addEventListener('pointerdown', (event: PointerEvent) => {
+      event.preventDefault();
+      isDragging = true;
+      startX = event.clientX;
+      startWidth = this.sidebar.getBoundingClientRect().width;
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+    });
   }
 
   private setupToolButtons(): void {

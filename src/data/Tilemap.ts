@@ -57,9 +57,16 @@ export class Tilemap {
 
   setTile(layerName: string, x: number, y: number, tileId: number): void {
     const layer = this.getLayer(layerName);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Tilemap.ts:58',message:'setTile called',data:{layerName,x,y,tileId,hasLayer:!!layer,width:this.width,height:this.height},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     if (!layer) return;
     if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
-    layer.data[y * this.width + x] = tileId;
+    const index = y * this.width + x;
+    layer.data[index] = tileId;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Tilemap.ts:62',message:'Tile data updated',data:{layerName,x,y,tileId,index,actualValue:layer.data[index]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
   }
 
   setCollision(x: number, y: number, hasCollision: boolean): void {
