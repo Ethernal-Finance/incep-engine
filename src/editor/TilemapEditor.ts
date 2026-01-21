@@ -4,6 +4,7 @@ import { Input } from '../engine/Input';
 import { Camera } from '../systems/CameraSystem';
 import { Vector2 } from '../utils/Vector2';
 import { AssetLoader } from '../engine/AssetLoader';
+import { EditorTool } from './Editor';
 
 export class TilemapEditor {
   private selectedTile: number = 1;
@@ -11,6 +12,8 @@ export class TilemapEditor {
   private stretchStart: Vector2 | null = null;
   private stretchEnd: Vector2 | null = null;
   private activeLayerIndex: number = 0;
+  private currentTool: EditorTool = EditorTool.Paint;
+  private showCollisionOverlay: boolean = true;
 
   constructor(private tilemap: Tilemap) {
     // Ensure we have at least a background layer
@@ -35,6 +38,18 @@ export class TilemapEditor {
     return this.selectedTile;
   }
 
+  setTool(tool: EditorTool): void {
+    this.currentTool = tool;
+  }
+
+  setShowCollisionOverlay(show: boolean): void {
+    this.showCollisionOverlay = show;
+  }
+
+  getShowCollisionOverlay(): boolean {
+    return this.showCollisionOverlay;
+  }
+
   update(_deltaTime: number, worldPos: Vector2, _camera: Camera, _zoom: number, _viewportWidth: number, _viewportHeight: number, mouseButtonDown: boolean, mouseButton: boolean): void {
     // Snap to grid (worldPos is already in world coordinates)
     // The grid size is derived from the tilemap dimensions
@@ -51,46 +66,106 @@ export class TilemapEditor {
       return;
     }
 
-    if (mouseButtonDown) {
-      // Start stretching and place initial tile
-      this.isStretching = true;
-      this.stretchStart = new Vector2(clampedX, clampedY);
-      this.stretchEnd = new Vector2(clampedX, clampedY);
-      
-      // Place tile immediately on click
-      if (clampedX >= 0 && clampedX < this.tilemap.width && clampedY >= 0 && clampedY < this.tilemap.height) {
-        this.tilemap.setTile(activeLayer.name, clampedX, clampedY, this.selectedTile);
+    // Handle Paint tool
+    if (this.currentTool === EditorTool.Paint) {
+      if (mouseButtonDown) {
+        // Start stretching and place initial tile
+        this.isStretching = true;
+        this.stretchStart = new Vector2(clampedX, clampedY);
+        this.stretchEnd = new Vector2(clampedX, clampedY);
+        
+        // Place tile immediately on click
+        if (clampedX >= 0 && clampedX < this.tilemap.width && clampedY >= 0 && clampedY < this.tilemap.height) {
+          this.tilemap.setTile(activeLayer.name, clampedX, clampedY, this.selectedTile);
+        }
       }
-    }
 
-    if (mouseButton && this.isStretching && this.stretchStart) {
-      // Update stretch end
-      this.stretchEnd = new Vector2(clampedX, clampedY);
-      
-      // Fill rectangle
-      const minX = Math.max(0, Math.min(this.stretchStart.x, this.stretchEnd.x));
-      const maxX = Math.min(this.tilemap.width - 1, Math.max(this.stretchStart.x, this.stretchEnd.x));
-      const minY = Math.max(0, Math.min(this.stretchStart.y, this.stretchEnd.y));
-      const maxY = Math.min(this.tilemap.height - 1, Math.max(this.stretchStart.y, this.stretchEnd.y));
+      if (mouseButton && this.isStretching && this.stretchStart) {
+        // Update stretch end
+        this.stretchEnd = new Vector2(clampedX, clampedY);
+        
+        // Fill rectangle
+        const minX = Math.max(0, Math.min(this.stretchStart.x, this.stretchEnd.x));
+        const maxX = Math.min(this.tilemap.width - 1, Math.max(this.stretchStart.x, this.stretchEnd.x));
+        const minY = Math.max(0, Math.min(this.stretchStart.y, this.stretchEnd.y));
+        const maxY = Math.min(this.tilemap.height - 1, Math.max(this.stretchStart.y, this.stretchEnd.y));
 
-      // Fill the rectangle with tiles
-      for (let y = minY; y <= maxY; y++) {
-        for (let x = minX; x <= maxX; x++) {
-          this.tilemap.setTile(activeLayer.name, x, y, this.selectedTile);
+        // Fill the rectangle with tiles
+        for (let y = minY; y <= maxY; y++) {
+          for (let x = minX; x <= maxX; x++) {
+            this.tilemap.setTile(activeLayer.name, x, y, this.selectedTile);
+          }
+        }
+      }
+
+      if (Input.getMouseButtonUp(0)) {
+        this.isStretching = false;
+        this.stretchStart = null;
+        this.stretchEnd = null;
+      }
+
+      // Right click - erase (always works regardless of tool)
+      if (Input.getMouseButton(2)) {
+        if (activeLayer) {
+          this.tilemap.setTile(activeLayer.name, clampedX, clampedY, 0);
         }
       }
     }
+    
+    // Handle Erase tool
+    else if (this.currentTool === EditorTool.Erase) {
+      if (mouseButtonDown) {
+        // Start erasing
+        this.isStretching = true;
+        this.stretchStart = new Vector2(clampedX, clampedY);
+        this.stretchEnd = new Vector2(clampedX, clampedY);
+        
+        // Erase tile immediately on click
+        if (clampedX >= 0 && clampedX < this.tilemap.width && clampedY >= 0 && clampedY < this.tilemap.height) {
+          this.tilemap.setTile(activeLayer.name, clampedX, clampedY, 0);
+        }
+      }
 
-    if (Input.getMouseButtonUp(0)) {
-      this.isStretching = false;
-      this.stretchStart = null;
-      this.stretchEnd = null;
+      if (mouseButton && this.isStretching && this.stretchStart) {
+        // Update stretch end
+        this.stretchEnd = new Vector2(clampedX, clampedY);
+        
+        // Erase rectangle
+        const minX = Math.max(0, Math.min(this.stretchStart.x, this.stretchEnd.x));
+        const maxX = Math.min(this.tilemap.width - 1, Math.max(this.stretchStart.x, this.stretchEnd.x));
+        const minY = Math.max(0, Math.min(this.stretchStart.y, this.stretchEnd.y));
+        const maxY = Math.min(this.tilemap.height - 1, Math.max(this.stretchStart.y, this.stretchEnd.y));
+
+        // Erase the rectangle
+        for (let y = minY; y <= maxY; y++) {
+          for (let x = minX; x <= maxX; x++) {
+            this.tilemap.setTile(activeLayer.name, x, y, 0);
+          }
+        }
+      }
+
+      if (Input.getMouseButtonUp(0)) {
+        this.isStretching = false;
+        this.stretchStart = null;
+        this.stretchEnd = null;
+      }
     }
+    
+    // Handle Collision tool
+    else if (this.currentTool === EditorTool.Collision) {
+      if (mouseButtonDown) {
+        // Toggle collision on click
+        if (clampedX >= 0 && clampedX < this.tilemap.width && clampedY >= 0 && clampedY < this.tilemap.height) {
+          const currentCollision = this.tilemap.getCollision(clampedX, clampedY);
+          this.tilemap.setCollision(clampedX, clampedY, !currentCollision);
+        }
+      }
 
-    // Right click - erase (check Input directly since we only pass left button state)
-    if (Input.getMouseButton(2)) {
-      if (activeLayer) {
-        this.tilemap.setTile(activeLayer.name, clampedX, clampedY, 0);
+      // Right click - remove collision
+      if (Input.getMouseButton(2)) {
+        if (clampedX >= 0 && clampedX < this.tilemap.width && clampedY >= 0 && clampedY < this.tilemap.height) {
+          this.tilemap.setCollision(clampedX, clampedY, false);
+        }
       }
     }
   }
@@ -143,7 +218,8 @@ export class TilemapEditor {
       const maxY = Math.max(this.stretchStart.y, this.stretchEnd.y);
 
       const ctx = renderer.getContext();
-      ctx.strokeStyle = '#00ff00';
+      // Use different colors for paint vs erase
+      ctx.strokeStyle = this.currentTool === EditorTool.Erase ? '#ff0000' : '#00ff00';
       ctx.lineWidth = 2;
       ctx.strokeRect(
         minX * tileSize,
@@ -151,6 +227,19 @@ export class TilemapEditor {
         (maxX - minX + 1) * tileSize,
         (maxY - minY + 1) * tileSize
       );
+    }
+
+    // Render collision overlay (always show when enabled, or when collision tool is active)
+    if (this.showCollisionOverlay || this.currentTool === EditorTool.Collision) {
+      const ctx = renderer.getContext();
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+      for (let y = 0; y < this.tilemap.height; y++) {
+        for (let x = 0; x < this.tilemap.width; x++) {
+          if (this.tilemap.getCollision(x, y)) {
+            ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+          }
+        }
+      }
     }
   }
 }

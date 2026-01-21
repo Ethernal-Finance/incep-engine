@@ -240,6 +240,9 @@ class EditorApp {
       } else if (e.key === '4') {
         this.editor.setTool(EditorTool.Entity);
         this.editorUI.setTool(EditorTool.Entity);
+      } else if (e.key === '5') {
+        this.editor.setTool(EditorTool.Collision);
+        this.editorUI.setTool(EditorTool.Collision);
       }
     });
 

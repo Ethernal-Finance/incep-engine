@@ -14,7 +14,8 @@ export enum EditorTool {
   Select = 'select',
   Paint = 'paint',
   Erase = 'erase',
-  Entity = 'entity'
+  Entity = 'entity',
+  Collision = 'collision'
 }
 
 export class Editor {
@@ -152,12 +153,15 @@ export class Editor {
     // Update active layer in tilemap editor
     this.tilemapEditor.setActiveLayer(this.activeLayer);
     
+    // Update tool in tilemap editor
+    this.tilemapEditor.setTool(this.currentTool);
+    
     // Debug: log mouse click
     if (mouseButtonDown) {
       console.log(`✓ Mouse click detected! Tool: ${this.currentTool}, WorldPos: (${worldPos.x.toFixed(1)}, ${worldPos.y.toFixed(1)}), ScreenPos: (${this.mousePosition.x}, ${this.mousePosition.y})`);
     }
     
-    if (this.currentTool === EditorTool.Paint || this.currentTool === EditorTool.Erase) {
+    if (this.currentTool === EditorTool.Paint || this.currentTool === EditorTool.Erase || this.currentTool === EditorTool.Collision) {
       // Pass mouse button state to tilemap editor
       this.tilemapEditor.update(deltaTime, worldPos, this.camera, this.zoom, viewportWidth, viewportHeight, mouseButtonDown, mouseButton);
     } else if (this.currentTool === EditorTool.Entity) {

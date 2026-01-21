@@ -13,6 +13,7 @@ export class Tilemap {
   public tilesetImage: string;
   public tilesetColumns: number;
   public tilesetRows: number;
+  public collisionData: boolean[]; // Collision data for each tile position
 
   constructor(
     width: number,
@@ -29,6 +30,7 @@ export class Tilemap {
     this.tilesetColumns = tilesetColumns;
     this.tilesetRows = tilesetRows;
     this.layers = [];
+    this.collisionData = new Array(width * height).fill(false);
   }
 
   addLayer(name: string, data?: number[]): TileLayer {
@@ -60,6 +62,16 @@ export class Tilemap {
     layer.data[y * this.width + x] = tileId;
   }
 
+  setCollision(x: number, y: number, hasCollision: boolean): void {
+    if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
+    this.collisionData[y * this.width + x] = hasCollision;
+  }
+
+  getCollision(x: number, y: number): boolean {
+    if (x < 0 || x >= this.width || y < 0 || y >= this.height) return false;
+    return this.collisionData[y * this.width + x];
+  }
+
   toJSON(): any {
     return {
       width: this.width,
@@ -68,7 +80,8 @@ export class Tilemap {
       tilesetImage: this.tilesetImage,
       tilesetColumns: this.tilesetColumns,
       tilesetRows: this.tilesetRows,
-      layers: this.layers
+      layers: this.layers,
+      collisionData: this.collisionData
     };
   }
 
@@ -82,6 +95,7 @@ export class Tilemap {
       data.tilesetRows
     );
     tilemap.layers = data.layers || [];
+    tilemap.collisionData = data.collisionData || new Array(data.width * data.height).fill(false);
     return tilemap;
   }
 }
