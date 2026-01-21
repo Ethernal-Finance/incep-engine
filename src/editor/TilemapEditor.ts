@@ -60,13 +60,7 @@ export class TilemapEditor {
   }
 
   setSelectedTile(tileId: number): void {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TilemapEditor.ts:62',message:'setSelectedTile called',data:{tileId,currentSelectedTile:this.selectedTile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     this.selectedTile = tileId;
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TilemapEditor.ts:64',message:'Setting stamp manager tile',data:{tileId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     this.paintingTools.getStampManager().setSingleTile(tileId);
   }
 

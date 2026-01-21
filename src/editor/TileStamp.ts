@@ -26,9 +26,6 @@ export class TileStampManager {
   }
 
   setSingleTile(tileId: number): void {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TileStamp.ts:28',message:'setSingleTile called',data:{tileId,previousTileIds:this.currentStamp.tileIds},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     this.currentStamp = {
       width: 1,
       height: 1,
@@ -37,9 +34,6 @@ export class TileStampManager {
       mirrorX: false,
       mirrorY: false
     };
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TileStamp.ts:37',message:'Stamp set complete',data:{tileId,stampTileIds:this.currentStamp.tileIds},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
   }
 
   setMultiTileStamp(tileIds: number[], width: number, height: number): void {
@@ -183,4 +177,3 @@ export class TileStampManager {
     return false;
   }
 }
-
