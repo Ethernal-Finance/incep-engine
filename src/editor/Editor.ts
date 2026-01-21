@@ -55,6 +55,13 @@ export class Editor {
     this.entityPlacer = new EntityPlacer(this.currentLevel);
     this._propertyInspector = new PropertyInspector();
     this.setupUI();
+    
+    // Test: Place a tile at (0, 0) to verify rendering works
+    const testLayer = this.currentLevel.tilemap.layers[0];
+    if (testLayer) {
+      this.currentLevel.tilemap.setTile(testLayer.name, 0, 0, 1);
+      console.log('Test tile placed at (0, 0) - you should see a tile in the top-left corner');
+    }
   }
 
   private initializeTileset(): void {
@@ -80,6 +87,7 @@ export class Editor {
 
   setTool(tool: EditorTool): void {
     this.currentTool = tool;
+    console.log(`Tool set to: ${tool}`);
   }
 
   getTool(): EditorTool {
@@ -104,6 +112,11 @@ export class Editor {
   }
 
   update(deltaTime: number): void {
+    // IMPORTANT: Check mouse button down BEFORE Input.update() clears it
+    // We need to capture the state before it's cleared in the next frame
+    const mouseButtonDown = Input.getMouseButtonDown(0);
+    const mouseButton = Input.getMouseButton(0);
+    
     this.mousePosition = Input.getMousePosition();
 
     // Handle panning
@@ -127,13 +140,26 @@ export class Editor {
     const centerX = viewportWidth / 2;
     const centerY = viewportHeight / 2;
     
-    // Convert screen coordinates to world coordinates (accounting for grid offset and zoom)
+    // Convert screen coordinates to world coordinates
+    // The rendering transform is: translate(center) -> scale(zoom) -> translate(gridOffset)
+    // To reverse this: world = (screen - center) / zoom - gridOffset
+    // gridOffset is -128, so subtracting it adds 128
+    // The grid in world space goes from 0 to 256 (8 tiles * 32px)
     const worldX = (this.mousePosition.x - centerX) / this.zoom - this.gridOffset.x;
     const worldY = (this.mousePosition.y - centerY) / this.zoom - this.gridOffset.y;
     const worldPos = new Vector2(worldX, worldY);
     
+    // Update active layer in tilemap editor
+    this.tilemapEditor.setActiveLayer(this.activeLayer);
+    
+    // Debug: log mouse click
+    if (mouseButtonDown) {
+      console.log(`✓ Mouse click detected! Tool: ${this.currentTool}, WorldPos: (${worldPos.x.toFixed(1)}, ${worldPos.y.toFixed(1)}), ScreenPos: (${this.mousePosition.x}, ${this.mousePosition.y})`);
+    }
+    
     if (this.currentTool === EditorTool.Paint || this.currentTool === EditorTool.Erase) {
-      this.tilemapEditor.update(deltaTime, worldPos, this.camera, this.zoom, viewportWidth, viewportHeight);
+      // Pass mouse button state to tilemap editor
+      this.tilemapEditor.update(deltaTime, worldPos, this.camera, this.zoom, viewportWidth, viewportHeight, mouseButtonDown, mouseButton);
     } else if (this.currentTool === EditorTool.Entity) {
       this.entityPlacer.update(deltaTime, worldPos, this.camera, this.zoom, viewportWidth, viewportHeight);
     }

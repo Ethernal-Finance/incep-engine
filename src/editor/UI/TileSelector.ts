@@ -245,8 +245,9 @@ export class TileSelector {
     if (this.onTileSelected) {
       this.onTileSelected(tileId);
     }
-    // Reload to show selection
-    this.loadTileset('default-tileset');
+    // Reload to show selection - preserve current tileset
+    const currentTileset = this.currentTilesetInfo?.path || 'default-tileset';
+    this.loadTileset(currentTileset);
   }
 
   getSelectedTile(): number {

@@ -1,4 +1,5 @@
 import { TileSelector } from './TileSelector';
+import { EditorTool } from '../Editor';
 
 export class EditorUI {
   private container: HTMLElement;
@@ -8,6 +9,8 @@ export class EditorUI {
   private statusBar!: HTMLElement;
   private tabs!: HTMLElement;
   private tileSelector!: TileSelector;
+  private toolButtons: Map<EditorTool, HTMLButtonElement> = new Map();
+  private onToolChanged?: (tool: EditorTool) => void;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -47,6 +50,30 @@ export class EditorUI {
     this.sidebar.className = 'editor-sidebar';
     this.sidebar.innerHTML = `
       <div class="sidebar-section">
+        <h3>Tools</h3>
+        <div class="tool-buttons">
+          <button class="tool-btn active" id="tool-select" title="Select (1)">Select</button>
+          <button class="tool-btn" id="tool-paint" title="Paint (2)">Paint</button>
+          <button class="tool-btn" id="tool-erase" title="Erase (3)">Erase</button>
+          <button class="tool-btn" id="tool-entity" title="Entity (4)">Entity</button>
+        </div>
+      </div>
+      <div class="sidebar-section">
+        <h3>Layers</h3>
+        <select class="layer-select" id="layer-select">
+          <option value="0">Layer 0</option>
+        </select>
+        <button class="btn-small" id="btn-add-layer">Add Layer</button>
+      </div>
+      <div class="sidebar-section">
+        <h3>Level</h3>
+        <input type="text" class="level-name-input" id="level-name-input" placeholder="Level name" value="Layout 1">
+        <div class="level-buttons">
+          <button class="btn-small" id="btn-save">Save</button>
+          <button class="btn-small" id="btn-load">Load</button>
+        </div>
+      </div>
+      <div class="sidebar-section">
         <h3>Assets</h3>
         <input type="text" class="search-input" placeholder="Search assets...">
       </div>
@@ -81,6 +108,94 @@ export class EditorUI {
 
     // Initialize tile selector
     this.tileSelector = new TileSelector(this.sidebar);
+    
+    // Initialize tool buttons
+    this.setupToolButtons();
+  }
+
+  private setupToolButtons(): void {
+    const selectBtn = document.getElementById('tool-select') as HTMLButtonElement;
+    const paintBtn = document.getElementById('tool-paint') as HTMLButtonElement;
+    const eraseBtn = document.getElementById('tool-erase') as HTMLButtonElement;
+    const entityBtn = document.getElementById('tool-entity') as HTMLButtonElement;
+
+    if (selectBtn) {
+      this.toolButtons.set(EditorTool.Select, selectBtn);
+      selectBtn.addEventListener('click', () => this.setTool(EditorTool.Select));
+    }
+    if (paintBtn) {
+      this.toolButtons.set(EditorTool.Paint, paintBtn);
+      paintBtn.addEventListener('click', () => this.setTool(EditorTool.Paint));
+    }
+    if (eraseBtn) {
+      this.toolButtons.set(EditorTool.Erase, eraseBtn);
+      eraseBtn.addEventListener('click', () => this.setTool(EditorTool.Erase));
+    }
+    if (entityBtn) {
+      this.toolButtons.set(EditorTool.Entity, entityBtn);
+      entityBtn.addEventListener('click', () => this.setTool(EditorTool.Entity));
+    }
+  }
+
+  setTool(tool: EditorTool): void {
+    console.log(`EditorUI.setTool called with: ${tool}`);
+    // Update button states
+    this.toolButtons.forEach((btn, toolType) => {
+      if (btn) {
+        btn.classList.toggle('active', toolType === tool);
+      }
+    });
+    
+    if (this.onToolChanged) {
+      console.log(`Calling onToolChanged callback with: ${tool}`);
+      this.onToolChanged(tool);
+    } else {
+      console.warn('onToolChanged callback not set!');
+    }
+  }
+
+  setOnToolChanged(callback: (tool: EditorTool) => void): void {
+    this.onToolChanged = callback;
+  }
+
+  getToolButtons(): Map<EditorTool, HTMLButtonElement> {
+    return this.toolButtons;
+  }
+
+  getLayerSelect(): HTMLSelectElement | null {
+    return document.getElementById('layer-select') as HTMLSelectElement;
+  }
+
+  getLevelNameInput(): HTMLInputElement | null {
+    return document.getElementById('level-name-input') as HTMLInputElement;
+  }
+
+  getSaveButton(): HTMLButtonElement | null {
+    return document.getElementById('btn-save') as HTMLButtonElement;
+  }
+
+  getLoadButton(): HTMLButtonElement | null {
+    return document.getElementById('btn-load') as HTMLButtonElement;
+  }
+
+  getAddLayerButton(): HTMLButtonElement | null {
+    return document.getElementById('btn-add-layer') as HTMLButtonElement;
+  }
+
+  updateLayerSelect(layers: Array<{ name: string; index: number }>, activeIndex: number): void {
+    const select = this.getLayerSelect();
+    if (!select) return;
+
+    select.innerHTML = '';
+    layers.forEach((layer) => {
+      const option = document.createElement('option');
+      option.value = layer.index.toString();
+      option.textContent = layer.name;
+      if (layer.index === activeIndex) {
+        option.selected = true;
+      }
+      select.appendChild(option);
+    });
   }
 
   getTileSelector(): TileSelector {
