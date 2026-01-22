@@ -268,18 +268,32 @@ export class GameScene extends Scene {
     if (this.loadingDoorTarget === targetLevelName) return;
     this.loadingDoorTarget = targetLevelName;
 
+    const safeName = targetLevelName.replace(/[^\w\-]+/g, '_').toLowerCase();
     const encodedName = encodeURIComponent(targetLevelName);
-    fetch(`/levels/${encodedName}.json`)
+    const candidates = [
+      `/levels/${encodedName}.json`,
+      `/levels/${safeName}.json`
+    ];
+
+    const tryFetch = (index: number): Promise<string> => {
+      if (index >= candidates.length) {
+        return Promise.reject(new Error('No matching level file.'));
+      }
+      return fetch(candidates[index])
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return response.text();
+        })
+        .catch(() => tryFetch(index + 1));
+    };
+
+    tryFetch(0)
       .then((response) => {
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        return response.text();
+        this.loadLevelFromJson(response);
       })
-      .then((text) => {
-        this.loadLevelFromJson(text);
-      })
-      .catch((error) => {
+      .catch((error: Error) => {
         console.warn(`Door target level "${targetLevelName}" not found via file fetch.`, error);
       })
       .finally(() => {

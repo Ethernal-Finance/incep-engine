@@ -132,12 +132,17 @@ class EditorApp {
     // Wire save button
     const saveBtn = this.editorUI.getSaveButton();
     if (saveBtn) {
-      saveBtn.addEventListener('click', () => {
+      saveBtn.addEventListener('click', async () => {
         const level = this.editor.getLevel();
         const levelName = level.name || 'Untitled Level';
         const levelData = this.editor.saveLevel();
         try {
-          this.downloadLevel(levelName, levelData);
+          try {
+            await this.saveLevelToServer(levelName, levelData);
+          } catch (error) {
+            console.warn('Failed to save level to server, falling back to download.', error);
+            this.downloadLevel(levelName, levelData);
+          }
           this.registerLevel(levelName, levelData);
           alert(`Level "${levelName}" saved to JSON.`);
         } catch (error) {
@@ -206,6 +211,17 @@ class EditorApp {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  }
+
+  private async saveLevelToServer(levelName: string, levelData: string): Promise<void> {
+    const response = await fetch('/api/levels/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: levelName, data: levelData })
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to save level: HTTP ${response.status}`);
+    }
   }
 
   private getLevelStore(): Map<string, string> {

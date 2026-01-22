@@ -43,6 +43,10 @@ export class Editor {
   private activeLayer: number = 0;
   private mousePosition: Vector2 = new Vector2();
   private gridOffset: Vector2 = new Vector2();
+  private isDoorStretching: boolean = false;
+  private doorStretchStart: Vector2 | null = null;
+  private doorStretchEnd: Vector2 | null = null;
+  private doorEditExisting: boolean = false;
 
   private tilemapEditor: TilemapEditor;
   private entityPlacer: EntityPlacer;
@@ -281,36 +285,33 @@ export class Editor {
         };
       }
     } else if (this.currentTool === EditorTool.Door) {
+      const tileSize = this.currentLevel.tilemap.tileSize;
+      const tileX = Math.floor(worldPos.x / tileSize);
+      const tileY = Math.floor(worldPos.y / tileSize);
+      const clampedX = Math.max(0, Math.min(this.currentLevel.tilemap.width - 1, tileX));
+      const clampedY = Math.max(0, Math.min(this.currentLevel.tilemap.height - 1, tileY));
+
       if (mouseButtonDown) {
-        const tileSize = this.currentLevel.tilemap.tileSize;
-        const tileX = Math.floor(worldPos.x / tileSize);
-        const tileY = Math.floor(worldPos.y / tileSize);
-        const clampedX = Math.max(0, Math.min(this.currentLevel.tilemap.width - 1, tileX));
-        const clampedY = Math.max(0, Math.min(this.currentLevel.tilemap.height - 1, tileY));
-        const existingDoor = this.currentLevel.getDoorAt(clampedX, clampedY);
-        const targetLevel = prompt(
-          existingDoor
-            ? 'Door target level name (blank to remove)'
-            : 'Door target level name',
-          existingDoor?.targetLevel || ''
-        );
-        if (targetLevel === null) return;
+        this.doorStretchStart = new Vector2(clampedX, clampedY);
+        this.doorStretchEnd = new Vector2(clampedX, clampedY);
+        const hasExistingDoor = !!this.currentLevel.getDoorAt(clampedX, clampedY);
+        this.isDoorStretching = Input.getKey('Shift');
+        this.doorEditExisting = hasExistingDoor && !this.isDoorStretching;
+      }
 
-        const doorsLayer = this.currentLevel.tilemap.getLayer('Doors') || this.currentLevel.tilemap.addLayer('Doors');
-        const selectedTile = this.tilemapEditor.getSelectedTile();
-        const trimmedTarget = targetLevel.trim();
+      if (mouseButton && this.isDoorStretching && this.doorStretchStart) {
+        this.doorStretchEnd = new Vector2(clampedX, clampedY);
+      }
 
-        if (trimmedTarget.length === 0) {
-          this.currentLevel.removeDoorAt(clampedX, clampedY);
-          this.currentLevel.tilemap.setTile(doorsLayer.name, clampedX, clampedY, 0);
-        } else {
-          this.currentLevel.upsertDoor({
-            x: clampedX,
-            y: clampedY,
-            targetLevel: trimmedTarget
-          });
-          this.currentLevel.tilemap.setTile(doorsLayer.name, clampedX, clampedY, selectedTile);
-        }
+      if (Input.getMouseButtonUp(0) && this.doorStretchStart) {
+        const endPoint = this.isDoorStretching && this.doorStretchEnd
+          ? this.doorStretchEnd
+          : this.doorStretchStart;
+        this.finalizeDoorPlacement(this.doorStretchStart, endPoint, this.doorEditExisting);
+        this.isDoorStretching = false;
+        this.doorStretchStart = null;
+        this.doorStretchEnd = null;
+        this.doorEditExisting = false;
       }
     } else if (this.currentTool === EditorTool.Paint || this.currentTool === EditorTool.Erase || this.currentTool === EditorTool.Collision || 
         this.currentTool === EditorTool.Brush || this.currentTool === EditorTool.FloodFill || this.currentTool === EditorTool.Line || 
@@ -370,6 +371,9 @@ export class Editor {
 
     // Render tilemap
     this.tilemapEditor.render(this.renderer);
+
+    this.renderDoorMarkers();
+    this.renderDoorStretchPreview();
 
     // Render spawn point marker
     if (this.currentLevel.spawnPoint) {
@@ -450,6 +454,88 @@ export class Editor {
     ctx.strokeStyle = '#ffd700';
     ctx.lineWidth = 2;
     ctx.strokeRect(startX, startY, gridWidth, gridHeight);
+  }
+
+  private finalizeDoorPlacement(start: Vector2, end: Vector2, preserveExistingTile: boolean = false): void {
+    const minX = Math.max(0, Math.min(start.x, end.x));
+    const maxX = Math.min(this.currentLevel.tilemap.width - 1, Math.max(start.x, end.x));
+    const minY = Math.max(0, Math.min(start.y, end.y));
+    const maxY = Math.min(this.currentLevel.tilemap.height - 1, Math.max(start.y, end.y));
+    const existingDoor = this.currentLevel.getDoorAt(start.x, start.y);
+    const targetLevel = prompt(
+      existingDoor
+        ? 'Door target level name (blank to remove)'
+        : 'Door target level name',
+      existingDoor?.targetLevel || ''
+    );
+    if (targetLevel === null) return;
+
+    const doorsLayer = this.currentLevel.tilemap.getLayer('Doors') || this.currentLevel.tilemap.addLayer('Doors');
+    const selectedTile = this.tilemapEditor.getSelectedTile();
+    const trimmedTarget = targetLevel.trim();
+    const isSingleTile = minX === maxX && minY === maxY;
+
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (trimmedTarget.length === 0) {
+          this.currentLevel.removeDoorAt(x, y);
+          this.currentLevel.tilemap.setTile(doorsLayer.name, x, y, 0);
+        } else {
+          this.currentLevel.upsertDoor({
+            x,
+            y,
+            targetLevel: trimmedTarget
+          });
+          const shouldPreserve = preserveExistingTile && isSingleTile;
+          const existingTile = this.currentLevel.tilemap.getTile(doorsLayer.name, x, y);
+          const nextTile = shouldPreserve && existingTile !== 0 ? existingTile : selectedTile;
+          this.currentLevel.tilemap.setTile(doorsLayer.name, x, y, nextTile);
+        }
+      }
+    }
+  }
+
+  private renderDoorStretchPreview(): void {
+    if (this.currentTool !== EditorTool.Door || !this.doorStretchStart) return;
+    const endPoint = this.doorStretchEnd ?? this.doorStretchStart;
+    const minX = Math.min(this.doorStretchStart.x, endPoint.x);
+    const maxX = Math.max(this.doorStretchStart.x, endPoint.x);
+    const minY = Math.min(this.doorStretchStart.y, endPoint.y);
+    const maxY = Math.max(this.doorStretchStart.y, endPoint.y);
+    const tileSize = this.currentLevel.tilemap.tileSize;
+
+    const ctx = this.renderer.getContext();
+    ctx.strokeStyle = '#4a9eff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(
+      minX * tileSize,
+      minY * tileSize,
+      (maxX - minX + 1) * tileSize,
+      (maxY - minY + 1) * tileSize
+    );
+  }
+
+  private renderDoorMarkers(): void {
+    const doors = this.currentLevel.doors;
+    if (!doors || doors.length === 0) return;
+    const tileSize = this.currentLevel.tilemap.tileSize;
+    const ctx = this.renderer.getContext();
+    ctx.strokeStyle = '#ff2fbf';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(255, 47, 191, 0.2)';
+
+    for (const door of doors) {
+      const x = door.x * tileSize;
+      const y = door.y * tileSize;
+      ctx.fillRect(x + 2, y + 2, tileSize - 4, tileSize - 4);
+      ctx.strokeRect(x + 1, y + 1, tileSize - 2, tileSize - 2);
+      ctx.beginPath();
+      ctx.moveTo(x + 4, y + 4);
+      ctx.lineTo(x + tileSize - 4, y + tileSize - 4);
+      ctx.moveTo(x + tileSize - 4, y + 4);
+      ctx.lineTo(x + 4, y + tileSize - 4);
+      ctx.stroke();
+    }
   }
 
   getLevel(): Level {
