@@ -34,6 +34,8 @@ export class GameScene extends Scene {
   private detectedFrameCounts: Map<string, number[]> = new Map();
   private frameDetectCanvas: HTMLCanvasElement | null = null;
   private frameDetectCtx: CanvasRenderingContext2D | null = null;
+  private activeDoorKey: string | null = null;
+  private loadingDoorTarget: string | null = null;
 
   constructor() {
     super('GameScene');
@@ -62,6 +64,7 @@ export class GameScene extends Scene {
     this.walkFrameIndex = 0;
     this.walkFrameRow = 0;
     this.detectedFrameCounts.clear();
+    this.activeDoorKey = null;
 
     // Create entities from level data
     for (const levelEntity of level.entities) {
@@ -164,6 +167,10 @@ export class GameScene extends Scene {
       }
     }
 
+    if (this.level && playerCollider) {
+      this.handleDoorTransitions(playerCollider);
+    }
+
     // Drive walk animation from movement velocity
     if (this.playerEntity) {
       const movement = this.playerEntity.getComponent<any>('movement');
@@ -215,6 +222,95 @@ export class GameScene extends Scene {
       }
     }
     return false;
+  }
+
+  private handleDoorTransitions(playerCollider: Collider): void {
+    if (!this.level) return;
+    const door = this.getDoorAtCollider(playerCollider, this.level);
+    if (!door) {
+      this.activeDoorKey = null;
+      return;
+    }
+
+    const doorKey = `${door.x},${door.y},${door.targetLevel}`;
+    if (this.activeDoorKey === doorKey) return;
+    this.activeDoorKey = doorKey;
+    this.loadDoorTarget(door.targetLevel);
+  }
+
+  private getDoorAtCollider(collider: Collider, level: Level): Level['doors'][number] | null {
+    const tileSize = level.tilemap.tileSize;
+    const minX = Math.floor(collider.bounds.x / tileSize);
+    const minY = Math.floor(collider.bounds.y / tileSize);
+    const maxX = Math.floor((collider.bounds.x + collider.bounds.width - 1) / tileSize);
+    const maxY = Math.floor((collider.bounds.y + collider.bounds.height - 1) / tileSize);
+
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const door = level.getDoorAt(x, y);
+        if (door) {
+          return door;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private loadDoorTarget(targetLevelName: string): void {
+    const store = (window as unknown as { __levelStore?: Map<string, string> }).__levelStore;
+    const stored = store?.get(targetLevelName);
+    if (stored) {
+      this.loadLevelFromJson(stored);
+      return;
+    }
+
+    if (this.loadingDoorTarget === targetLevelName) return;
+    this.loadingDoorTarget = targetLevelName;
+
+    const encodedName = encodeURIComponent(targetLevelName);
+    fetch(`/levels/${encodedName}.json`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return response.text();
+      })
+      .then((text) => {
+        this.loadLevelFromJson(text);
+      })
+      .catch((error) => {
+        console.warn(`Door target level "${targetLevelName}" not found via file fetch.`, error);
+      })
+      .finally(() => {
+        if (this.loadingDoorTarget === targetLevelName) {
+          this.loadingDoorTarget = null;
+        }
+      });
+  }
+
+  private loadLevelFromJson(levelData: string): void {
+    try {
+      const levelJson = JSON.parse(levelData);
+      const nextLevel = Level.fromJSON(levelJson);
+      this.ensureTilesetLoaded(nextLevel);
+      this.loadLevel(nextLevel);
+    } catch (error) {
+      console.error('Failed to load door target level:', error);
+    }
+  }
+
+  private ensureTilesetLoaded(level: Level): void {
+    if (!level.tilemap.tilesetImage) return;
+    const existingImage = AssetLoader.getImage(level.tilemap.tilesetImage);
+    if (existingImage || level.tilemap.tilesetImage === 'default-tileset') return;
+
+    const tilesetPath = level.tilemap.tilesetImage.startsWith('/')
+      ? level.tilemap.tilesetImage
+      : `/assets/${level.tilemap.tilesetImage}`;
+    AssetLoader.loadImage(tilesetPath, level.tilemap.tilesetImage).catch((error) => {
+      console.warn(`Failed to load tileset ${level.tilemap.tilesetImage}:`, error);
+    });
   }
 
   private getFrameCountForSprite(sprite: any, spriteImage: HTMLImageElement): number {

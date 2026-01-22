@@ -28,14 +28,27 @@ export class TilemapEditor {
   private lastCollisionEraseCell: Vector2 | null = null;
 
   constructor(private tilemap: Tilemap, undoSystem?: UndoSystem, collisionSystem?: CollisionSystem) {
-    // Ensure we have at least a background layer
-    if (this.tilemap.layers.length === 0) {
-      this.tilemap.addLayer('background');
-    }
+    const defaultLayers = [
+      'Pause Menu',
+      'Transitions',
+      'HUD',
+      'CameraZones',
+      'Tilemap_Foreground',
+      'Objects',
+      'Tilemap_Objects2',
+      'Tilemap_Objects',
+      'Tilemap_Ground',
+      'Collisions'
+    ];
 
-    if (!this.tilemap.getLayer('Collisions')) {
-      const collisionLayer = this.tilemap.addLayer('Collisions');
-      collisionLayer.visible = false;
+    if (this.tilemap.layers.length === 0) {
+      defaultLayers.forEach((layerName) => this.tilemap.addLayer(layerName));
+    } else {
+      defaultLayers.forEach((layerName) => {
+        if (!this.tilemap.getLayer(layerName)) {
+          this.tilemap.addLayer(layerName);
+        }
+      });
     }
     
     this.paintingTools = new PaintingTools();

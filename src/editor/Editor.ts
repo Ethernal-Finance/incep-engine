@@ -27,7 +27,8 @@ export enum EditorTool {
   Eyedropper = 'eyedropper',
   Entity = 'entity',
   Collision = 'collision',
-  Spawn = 'spawn'
+  Spawn = 'spawn',
+  Door = 'door'
 }
 
 export class Editor {
@@ -278,6 +279,38 @@ export class Editor {
           x: clampedX * tileSize,
           y: clampedY * tileSize
         };
+      }
+    } else if (this.currentTool === EditorTool.Door) {
+      if (mouseButtonDown) {
+        const tileSize = this.currentLevel.tilemap.tileSize;
+        const tileX = Math.floor(worldPos.x / tileSize);
+        const tileY = Math.floor(worldPos.y / tileSize);
+        const clampedX = Math.max(0, Math.min(this.currentLevel.tilemap.width - 1, tileX));
+        const clampedY = Math.max(0, Math.min(this.currentLevel.tilemap.height - 1, tileY));
+        const existingDoor = this.currentLevel.getDoorAt(clampedX, clampedY);
+        const targetLevel = prompt(
+          existingDoor
+            ? 'Door target level name (blank to remove)'
+            : 'Door target level name',
+          existingDoor?.targetLevel || ''
+        );
+        if (targetLevel === null) return;
+
+        const doorsLayer = this.currentLevel.tilemap.getLayer('Doors') || this.currentLevel.tilemap.addLayer('Doors');
+        const selectedTile = this.tilemapEditor.getSelectedTile();
+        const trimmedTarget = targetLevel.trim();
+
+        if (trimmedTarget.length === 0) {
+          this.currentLevel.removeDoorAt(clampedX, clampedY);
+          this.currentLevel.tilemap.setTile(doorsLayer.name, clampedX, clampedY, 0);
+        } else {
+          this.currentLevel.upsertDoor({
+            x: clampedX,
+            y: clampedY,
+            targetLevel: trimmedTarget
+          });
+          this.currentLevel.tilemap.setTile(doorsLayer.name, clampedX, clampedY, selectedTile);
+        }
       }
     } else if (this.currentTool === EditorTool.Paint || this.currentTool === EditorTool.Erase || this.currentTool === EditorTool.Collision || 
         this.currentTool === EditorTool.Brush || this.currentTool === EditorTool.FloodFill || this.currentTool === EditorTool.Line || 

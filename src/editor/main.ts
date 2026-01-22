@@ -27,7 +27,8 @@ class EditorApp {
     
     // Set canvas size
     const resizeCanvas = () => {
-      const sidebarWidth = 280;
+      const sidebar = document.querySelector('.editor-sidebar') as HTMLElement | null;
+      const sidebarWidth = sidebar ? sidebar.getBoundingClientRect().width : 280;
       const topBarHeight = 48;
       const statusBarHeight = 32;
       const width = window.innerWidth - sidebarWidth;
@@ -40,6 +41,11 @@ class EditorApp {
 
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
+    const sidebar = document.querySelector('.editor-sidebar') as HTMLElement | null;
+    if (sidebar && 'ResizeObserver' in window) {
+      const observer = new ResizeObserver(() => resizeCanvas());
+      observer.observe(sidebar);
+    }
 
     this.editor = new Editor(canvas);
     
@@ -74,14 +80,18 @@ class EditorApp {
     console.log('Default tool set to Paint');
     
     // Wire layer selector
-    const layerSelect = this.editorUI.getLayerSelect();
-    if (layerSelect) {
+    this.updateLayerSelector();
+    this.editorUI.setOnLayerSelected((layerIndex) => {
+      this.editor.setActiveLayer(layerIndex);
       this.updateLayerSelector();
-      layerSelect.addEventListener('change', (e) => {
-        const layerIndex = parseInt((e.target as HTMLSelectElement).value);
-        this.editor.setActiveLayer(layerIndex);
-      });
-    }
+    });
+    this.editorUI.setOnLayerVisibilityChanged((layerIndex, visible) => {
+      const level = this.editor.getLevel();
+      const layer = level.tilemap.layers[layerIndex];
+      if (layer) {
+        layer.visible = visible;
+      }
+    });
     
     // Wire add layer button
     const addLayerBtn = this.editorUI.getAddLayerButton();
@@ -115,6 +125,7 @@ class EditorApp {
       levelNameInput.addEventListener('change', (e) => {
         const level = this.editor.getLevel();
         level.name = (e.target as HTMLInputElement).value;
+        this.editorUI.updateLayersTitle(level.name);
       });
     }
     
@@ -126,8 +137,9 @@ class EditorApp {
         const levelName = level.name || 'Untitled Level';
         const levelData = this.editor.saveLevel();
         try {
-          localStorage.setItem(`level_${levelName}`, levelData);
-          alert(`Level "${levelName}" saved successfully!`);
+          this.downloadLevel(levelName, levelData);
+          this.registerLevel(levelName, levelData);
+          alert(`Level "${levelName}" saved to JSON.`);
         } catch (error) {
           console.error('Failed to save level:', error);
           alert('Failed to save level. Check console for details.');
@@ -139,7 +151,7 @@ class EditorApp {
     const loadBtn = this.editorUI.getLoadButton();
     if (loadBtn) {
       loadBtn.addEventListener('click', () => {
-        this.showLoadDialog();
+        this.loadLevelFromFile();
       });
     }
     
@@ -147,87 +159,73 @@ class EditorApp {
     this.start();
   }
 
-  private showLoadDialog(): void {
-    // Get all saved levels from localStorage
-    const savedLevels: Array<{ name: string; key: string }> = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('level_')) {
-        const name = key.replace('level_', '');
-        savedLevels.push({ name, key });
-      }
-    }
+  private loadLevelFromFile(): void {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
 
-    if (savedLevels.length === 0) {
-      alert('No saved levels found.');
-      return;
-    }
-
-    // Create simple dialog
-    const dialog = document.createElement('div');
-    dialog.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #2a2a2a;
-      padding: 20px;
-      border: 2px solid #444;
-      border-radius: 4px;
-      z-index: 10000;
-      color: #fff;
-    `;
-    dialog.innerHTML = `
-      <h3 style="margin-top: 0;">Load Level</h3>
-      <select id="load-level-select" style="width: 100%; padding: 8px; margin-bottom: 10px; background: #1a1a1a; color: #fff; border: 1px solid #444;">
-        ${savedLevels.map(level => `<option value="${level.key}">${level.name}</option>`).join('')}
-      </select>
-      <div style="display: flex; gap: 10px;">
-        <button id="load-confirm" style="flex: 1; padding: 8px; background: #4a9eff; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Load</button>
-        <button id="load-cancel" style="flex: 1; padding: 8px; background: #666; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
-      </div>
-    `;
-    document.body.appendChild(dialog);
-
-    const confirmBtn = dialog.querySelector('#load-confirm') as HTMLButtonElement;
-    const cancelBtn = dialog.querySelector('#load-cancel') as HTMLButtonElement;
-    const select = dialog.querySelector('#load-level-select') as HTMLSelectElement;
-
-    confirmBtn.addEventListener('click', () => {
-      const selectedKey = select.value;
-      const levelData = localStorage.getItem(selectedKey);
-      if (levelData) {
+      const reader = new FileReader();
+      reader.onload = () => {
         try {
-          const levelJson = JSON.parse(levelData);
+          const levelJson = JSON.parse(String(reader.result || ''));
           const level = Level.fromJSON(levelJson);
           this.editor.loadLevel(level);
-          
-          // Update UI
+
           const levelNameInput = this.editorUI.getLevelNameInput();
           if (levelNameInput) {
             levelNameInput.value = level.name;
           }
+          this.editorUI.updateLayersTitle(level.name);
           this.updateLayerSelector();
-          
+
+          const levelData = JSON.stringify(levelJson, null, 2);
+          this.registerLevel(level.name, levelData);
           alert(`Level "${level.name}" loaded successfully!`);
         } catch (error) {
           console.error('Failed to load level:', error);
           alert('Failed to load level. Check console for details.');
         }
-      }
-      document.body.removeChild(dialog);
-    });
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
 
-    cancelBtn.addEventListener('click', () => {
-      document.body.removeChild(dialog);
-    });
+  private downloadLevel(levelName: string, levelData: string): void {
+    const safeName = levelName.replace(/[^\w\-]+/g, '_').toLowerCase();
+    const fileName = `${safeName || 'level'}.json`;
+    const blob = new Blob([levelData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  private getLevelStore(): Map<string, string> {
+    const win = window as unknown as { __levelStore?: Map<string, string> };
+    if (!win.__levelStore) {
+      win.__levelStore = new Map();
+    }
+    return win.__levelStore;
+  }
+
+  private registerLevel(name: string, data: string): void {
+    this.getLevelStore().set(name, data);
   }
 
   private updateLayerSelector(): void {
     const level = this.editor.getLevel();
     const layers = level.tilemap.layers.map((layer, index) => ({
       name: layer.name,
-      index: index
+      index: index,
+      visible: layer.visible
     }));
     this.editorUI.updateLayerSelect(layers, this.editor.getActiveLayer());
   }
@@ -268,6 +266,8 @@ class EditorApp {
         this.editorUI.setTool(EditorTool.Eyedropper);
       } else if (e.key === '6') {
         this.editorUI.setTool(EditorTool.Spawn);
+      } else if (e.key === '7') {
+        this.editorUI.setTool(EditorTool.Door);
       }
       
       // Undo/Redo

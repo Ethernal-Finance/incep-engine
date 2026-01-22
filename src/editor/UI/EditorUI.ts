@@ -11,6 +11,8 @@ export class EditorUI {
   private tileSelector!: TileSelector;
   private toolButtons: Map<EditorTool, HTMLButtonElement> = new Map();
   private onToolChanged?: (tool: EditorTool) => void;
+  private onLayerSelected?: (layerIndex: number) => void;
+  private onLayerVisibilityChanged?: (layerIndex: number, visible: boolean) => void;
   private readonly minSidebarWidth = 200;
   private readonly maxSidebarWidth = 520;
 
@@ -50,22 +52,69 @@ export class EditorUI {
       <div class="sidebar-section">
         <h3>Tools</h3>
         <div class="tool-buttons">
-          <button class="tool-btn active" id="tool-select" title="Select (1)">Select</button>
-          <button class="tool-btn" id="tool-paint" title="Paint (2)">Paint</button>
-          <button class="tool-btn" id="tool-erase" title="Erase (3)">Erase</button>
-          <button class="tool-btn" id="tool-entity" title="Entity (4)">Entity</button>
-          <button class="tool-btn" id="tool-collision" title="Collision (5)">Collision</button>
-          <button class="tool-btn" id="tool-spawn" title="Spawn (6)">Spawn</button>
-        </div>
-      </div>
-      <div class="sidebar-section">
-        <h3>Layers</h3>
-        <select class="layer-select" id="layer-select">
-          <option value="0">Layer 0</option>
-        </select>
-        <div class="layer-buttons">
-          <button class="btn-small" id="btn-add-layer">Add Layer</button>
-          <button class="btn-small" id="btn-rename-layer">Rename Layer</button>
+          <button class="tool-btn active" id="tool-select" title="Select (1)">
+            <span class="tool-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20">
+                <path d="M4 3l10 6-4 1 2.5 6-2 1-2.5-6-4 4z"></path>
+              </svg>
+            </span>
+            <span class="tool-label">Select</span>
+          </button>
+          <button class="tool-btn" id="tool-paint" title="Paint (2)">
+            <span class="tool-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20">
+                <path d="M13.5 3.5l3 3-7.5 7.5-3.5 1 1-3.5z"></path>
+                <path d="M6 14.5c-2 0-3.5 1.4-3.5 3.2 0 1.3 1 2.3 2.4 2.3 2 0 3.6-1.4 3.6-3.2 0-1.3-1-2.3-2.5-2.3z"></path>
+              </svg>
+            </span>
+            <span class="tool-label">Paint</span>
+          </button>
+          <button class="tool-btn" id="tool-erase" title="Erase (3)">
+            <span class="tool-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20">
+                <path d="M4 12l6-6 6 6-4 4H8l-4-4z"></path>
+                <path d="M8 16h6"></path>
+              </svg>
+            </span>
+            <span class="tool-label">Erase</span>
+          </button>
+          <button class="tool-btn" id="tool-entity" title="Entity (4)">
+            <span class="tool-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20">
+                <path d="M4 7l6-3 6 3v6l-6 3-6-3z"></path>
+                <path d="M10 4v12"></path>
+                <path d="M4 7l6 3 6-3"></path>
+              </svg>
+            </span>
+            <span class="tool-label">Entity</span>
+          </button>
+          <button class="tool-btn" id="tool-collision" title="Collision (5)">
+            <span class="tool-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20">
+                <circle cx="10" cy="10" r="6"></circle>
+                <path d="M10 3v4M10 13v4M3 10h4M13 10h4"></path>
+              </svg>
+            </span>
+            <span class="tool-label">Collision</span>
+          </button>
+          <button class="tool-btn" id="tool-spawn" title="Spawn (6)">
+            <span class="tool-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20">
+                <circle cx="10" cy="10" r="6"></circle>
+                <path d="M10 7v6M7 10h6"></path>
+              </svg>
+            </span>
+            <span class="tool-label">Spawn</span>
+          </button>
+          <button class="tool-btn" id="tool-door" title="Door (7)">
+            <span class="tool-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20">
+                <rect x="5" y="3" width="10" height="14" rx="1"></rect>
+                <circle cx="12.5" cy="10" r="1"></circle>
+              </svg>
+            </span>
+            <span class="tool-label">Door</span>
+          </button>
         </div>
       </div>
       <div class="sidebar-section">
@@ -80,17 +129,34 @@ export class EditorUI {
         <h3>Assets</h3>
         <input type="text" class="search-input" placeholder="Search assets...">
       </div>
-      <div class="sidebar-section">
-        <h3>Tile Selector</h3>
-        <select class="tileset-select" id="tileset-select">
-          <option>Select a tileset...</option>
-        </select>
-        <div class="tile-zoom">
-          <label for="tile-zoom-range">Zoom</label>
-          <input type="range" id="tile-zoom-range" min="50" max="200" value="100">
+      <div class="sidebar-section tilemap-panel">
+        <div class="panel-tabs" role="tablist" aria-label="Tilemap panels">
+          <button class="panel-tab active" role="tab" aria-selected="true" data-panel="tilemap">Tilemap</button>
+          <button class="panel-tab" role="tab" aria-selected="false" data-panel="layers">Layers</button>
         </div>
-        <div class="tile-preview" id="tile-preview"></div>
-        <div class="tile-info">No tile selected</div>
+        <div class="panel-content active" data-panel="tilemap" role="tabpanel">
+          <h3>Tile Selector</h3>
+          <select class="tileset-select" id="tileset-select">
+            <option>Select a tileset...</option>
+          </select>
+          <div class="tile-zoom">
+            <label for="tile-zoom-range">Zoom</label>
+            <input type="range" id="tile-zoom-range" min="50" max="200" value="100">
+          </div>
+          <div class="tile-preview" id="tile-preview"></div>
+          <div class="tile-info">No tile selected</div>
+        </div>
+        <div class="panel-content" data-panel="layers" role="tabpanel" aria-hidden="true">
+          <div class="layers-title">
+            <span>Layers - </span>
+            <span id="layers-level-name">Layout 1</span>
+          </div>
+          <ul class="layer-list" id="layer-list"></ul>
+          <div class="layer-buttons">
+            <button class="btn-small" id="btn-add-layer">Add Layer</button>
+            <button class="btn-small" id="btn-rename-layer">Rename Layer</button>
+          </div>
+        </div>
       </div>
     `;
 
@@ -110,6 +176,7 @@ export class EditorUI {
     this.container.appendChild(this.statusBar);
 
     this.setupSidebarResize();
+    this.setupPanelTabs();
 
     // Initialize tabs
     this.tabs = document.getElementById('tabs-container')!;
@@ -173,6 +240,7 @@ export class EditorUI {
     const entityBtn = document.getElementById('tool-entity') as HTMLButtonElement;
     const collisionBtn = document.getElementById('tool-collision') as HTMLButtonElement;
     const spawnBtn = document.getElementById('tool-spawn') as HTMLButtonElement;
+    const doorBtn = document.getElementById('tool-door') as HTMLButtonElement;
 
     if (selectBtn) {
       this.toolButtons.set(EditorTool.Select, selectBtn);
@@ -198,6 +266,36 @@ export class EditorUI {
       this.toolButtons.set(EditorTool.Spawn, spawnBtn);
       spawnBtn.addEventListener('click', () => this.setTool(EditorTool.Spawn));
     }
+    if (doorBtn) {
+      this.toolButtons.set(EditorTool.Door, doorBtn);
+      doorBtn.addEventListener('click', () => this.setTool(EditorTool.Door));
+    }
+  }
+
+  private setupPanelTabs(): void {
+    const tabs = Array.from(this.sidebar.querySelectorAll<HTMLButtonElement>('.panel-tab'));
+    const panels = Array.from(this.sidebar.querySelectorAll<HTMLElement>('.panel-content'));
+    if (!tabs.length || !panels.length) return;
+
+    const setActive = (panelId: string) => {
+      tabs.forEach((tab) => {
+        const isActive = tab.dataset.panel === panelId;
+        tab.classList.toggle('active', isActive);
+        tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      panels.forEach((panel) => {
+        const isActive = panel.dataset.panel === panelId;
+        panel.classList.toggle('active', isActive);
+        panel.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+      });
+    };
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const panelId = tab.dataset.panel;
+        if (panelId) setActive(panelId);
+      });
+    });
   }
 
   setTool(tool: EditorTool): void {
@@ -221,12 +319,16 @@ export class EditorUI {
     this.onToolChanged = callback;
   }
 
-  getToolButtons(): Map<EditorTool, HTMLButtonElement> {
-    return this.toolButtons;
+  setOnLayerSelected(callback: (layerIndex: number) => void): void {
+    this.onLayerSelected = callback;
   }
 
-  getLayerSelect(): HTMLSelectElement | null {
-    return document.getElementById('layer-select') as HTMLSelectElement;
+  setOnLayerVisibilityChanged(callback: (layerIndex: number, visible: boolean) => void): void {
+    this.onLayerVisibilityChanged = callback;
+  }
+
+  getToolButtons(): Map<EditorTool, HTMLButtonElement> {
+    return this.toolButtons;
   }
 
   getLevelNameInput(): HTMLInputElement | null {
@@ -249,24 +351,73 @@ export class EditorUI {
     return document.getElementById('btn-rename-layer') as HTMLButtonElement;
   }
 
-  updateLayerSelect(layers: Array<{ name: string; index: number }>, activeIndex: number): void {
-    const select = this.getLayerSelect();
-    if (!select) return;
+  updateLayerSelect(
+    layers: Array<{ name: string; index: number; visible: boolean }>,
+    activeIndex: number
+  ): void {
+    const list = document.getElementById('layer-list') as HTMLUListElement | null;
+    if (!list) return;
 
-    select.innerHTML = '';
+    list.innerHTML = '';
     layers.forEach((layer) => {
-      const option = document.createElement('option');
-      option.value = layer.index.toString();
-      option.textContent = layer.name;
-      if (layer.index === activeIndex) {
-        option.selected = true;
-      }
-      select.appendChild(option);
+      const item = document.createElement('li');
+      item.className = `layer-item ${layer.index === activeIndex ? 'active' : ''}`;
+      item.dataset.index = layer.index.toString();
+
+      const visibilityToggle = document.createElement('input');
+      visibilityToggle.type = 'checkbox';
+      visibilityToggle.className = 'layer-visibility';
+      visibilityToggle.checked = layer.visible;
+      visibilityToggle.title = layer.visible ? 'Hide layer' : 'Show layer';
+      visibilityToggle.addEventListener('click', (event) => event.stopPropagation());
+      visibilityToggle.addEventListener('change', () => {
+        if (this.onLayerVisibilityChanged) {
+          this.onLayerVisibilityChanged(layer.index, visibilityToggle.checked);
+        }
+      });
+
+      const name = document.createElement('span');
+      name.className = 'layer-name';
+      name.textContent = layer.name;
+
+      const lockBtn = document.createElement('button');
+      lockBtn.className = 'layer-lock';
+      lockBtn.type = 'button';
+      lockBtn.title = 'Lock layer';
+      lockBtn.innerHTML = `
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <rect x="4" y="9" width="12" height="8" rx="1.5"></rect>
+          <path d="M6 9V6a4 4 0 0 1 8 0v3"></path>
+        </svg>
+      `;
+      lockBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        lockBtn.classList.toggle('locked');
+      });
+
+      item.appendChild(visibilityToggle);
+      item.appendChild(lockBtn);
+      item.appendChild(name);
+
+      item.addEventListener('click', () => {
+        if (this.onLayerSelected) {
+          this.onLayerSelected(layer.index);
+        }
+      });
+
+      list.appendChild(item);
     });
   }
 
   getTileSelector(): TileSelector {
     return this.tileSelector;
+  }
+
+  updateLayersTitle(levelName: string): void {
+    const label = document.getElementById('layers-level-name');
+    if (label) {
+      label.textContent = levelName;
+    }
   }
 
   addTab(name: string, active: boolean = false): void {
