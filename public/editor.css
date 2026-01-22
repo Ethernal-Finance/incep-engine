@@ -415,6 +415,40 @@ body {
   border-color: #5a5a5a;
 }
 
+.select-input {
+  background: #3a3a3a;
+  border: 1px solid #4a4a4a;
+  color: #e0e0e0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  width: 100%;
+  cursor: pointer;
+}
+
+.select-input:focus {
+  outline: none;
+  border-color: #5a5a5a;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #cfcfcf;
+  cursor: pointer;
+}
+
+.toggle-row input {
+  accent-color: #ffd700;
+}
+
+.entity-hint {
+  font-size: 11px;
+  color: #888;
+}
+
 .field-label {
   font-size: 11px;
   color: #b0b0b0;
@@ -562,4 +596,3 @@ body {
   height: 100vh;
   z-index: 50;
 }
-

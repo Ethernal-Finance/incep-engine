@@ -152,6 +152,8 @@ class EditorApp {
         this.updateSelectedEntitySound('soundOnInteract', (e.target as HTMLInputElement).value);
       });
     }
+
+    this.setupEntityPanel();
     
     // Wire save button
     const saveBtn = this.editorUI.getSaveButton();
@@ -279,6 +281,7 @@ class EditorApp {
       this.editorUI.updateActiveLayer(this.editor.getActiveLayer());
       this.editorUI.updateZoom(this.editor.getZoom());
       this.syncAudioPanel();
+      this.syncEntityPanel();
     };
 
     // Keyboard shortcuts for tools
@@ -586,6 +589,102 @@ class EditorApp {
         interactInput.value = interactValue;
       }
       this.lastSelectedEntityId = selectedId;
+    }
+  }
+
+  private setupEntityPanel(): void {
+    const typeSelect = this.editorUI.getEntityTypeSelect();
+    const customInput = this.editorUI.getEntityCustomTypeInput();
+    const snapToggle = this.editorUI.getEntitySnapToggle();
+
+    const syncType = () => {
+      const nextType = this.getSelectedEntityTypeFromUI();
+      this.editor.setSelectedEntityType(nextType);
+      if (customInput && typeSelect) {
+        const isCustom = typeSelect.value === 'custom';
+        customInput.disabled = !isCustom;
+        if (!isCustom) {
+          customInput.value = '';
+        }
+      }
+    };
+
+    if (typeSelect) {
+      typeSelect.addEventListener('change', syncType);
+    }
+
+    if (customInput) {
+      customInput.addEventListener('input', () => {
+        if (typeSelect && typeSelect.value === 'custom') {
+          this.editor.setSelectedEntityType(this.getSelectedEntityTypeFromUI());
+        }
+      });
+    }
+
+    if (snapToggle) {
+      snapToggle.addEventListener('change', (e) => {
+        this.editor.setEntitySnapToGrid((e.target as HTMLInputElement).checked);
+      });
+      snapToggle.checked = this.editor.getEntitySnapToGrid();
+    }
+
+    syncType();
+  }
+
+  private getSelectedEntityTypeFromUI(): string {
+    const typeSelect = this.editorUI.getEntityTypeSelect();
+    const customInput = this.editorUI.getEntityCustomTypeInput();
+    if (!typeSelect) {
+      return this.editor.getSelectedEntityType();
+    }
+
+    if (typeSelect.value === 'custom') {
+      const customValue = customInput?.value.trim() ?? '';
+      return customValue.length > 0 ? customValue : 'entity';
+    }
+
+    return typeSelect.value;
+  }
+
+  private syncEntityPanel(): void {
+    const typeSelect = this.editorUI.getEntityTypeSelect();
+    const customInput = this.editorUI.getEntityCustomTypeInput();
+    const snapToggle = this.editorUI.getEntitySnapToggle();
+    if (!typeSelect || !customInput || !snapToggle) return;
+
+    const selectedEntity = this.editor.getSelectedEntity();
+    const activeType = selectedEntity?.type ?? this.editor.getSelectedEntityType();
+    const knownTypes = new Set(['player', 'enemy', 'npc', 'item']);
+    const activeElement = document.activeElement;
+    const isEditingType = activeElement === typeSelect || activeElement === customInput;
+
+    if (!isEditingType) {
+      if (knownTypes.has(activeType)) {
+        if (typeSelect.value !== activeType) {
+          typeSelect.value = activeType;
+        }
+        if (!customInput.disabled) {
+          customInput.disabled = true;
+        }
+        if (customInput.value) {
+          customInput.value = '';
+        }
+      } else {
+        if (typeSelect.value !== 'custom') {
+          typeSelect.value = 'custom';
+        }
+        if (customInput.disabled) {
+          customInput.disabled = false;
+        }
+        if (customInput.value !== activeType) {
+          customInput.value = activeType;
+        }
+      }
+    }
+
+    const desiredSnap = this.editor.getEntitySnapToGrid();
+    if (snapToggle.checked !== desiredSnap) {
+      snapToggle.checked = desiredSnap;
     }
   }
 }
