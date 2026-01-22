@@ -117,6 +117,23 @@ export class EditorUI {
           </button>
         </div>
       </div>
+      <div class="sidebar-section entity-panel">
+        <h3>Entity</h3>
+        <label class="field-label" for="entity-type-select">Type</label>
+        <select class="select-input" id="entity-type-select">
+          <option value="player">Player</option>
+          <option value="enemy">Enemy</option>
+          <option value="npc">NPC</option>
+          <option value="item">Item</option>
+          <option value="custom">Custom</option>
+        </select>
+        <input type="text" class="search-input" id="entity-type-custom" placeholder="Custom type name" disabled>
+        <label class="toggle-row" for="entity-snap-grid">
+          <input type="checkbox" id="entity-snap-grid" checked>
+          <span>Snap to grid</span>
+        </label>
+        <div class="entity-hint">Alt + drag to duplicate. Delete to remove.</div>
+      </div>
       <div class="sidebar-section">
         <h3>Level</h3>
         <input type="text" class="level-name-input" id="level-name-input" placeholder="Level name" value="Layout 1">
@@ -360,6 +377,18 @@ export class EditorUI {
     return document.getElementById('entity-sound-interact') as HTMLInputElement;
   }
 
+  getEntityTypeSelect(): HTMLSelectElement | null {
+    return document.getElementById('entity-type-select') as HTMLSelectElement;
+  }
+
+  getEntityCustomTypeInput(): HTMLInputElement | null {
+    return document.getElementById('entity-type-custom') as HTMLInputElement;
+  }
+
+  getEntitySnapToggle(): HTMLInputElement | null {
+    return document.getElementById('entity-snap-grid') as HTMLInputElement;
+  }
+
   getSaveButton(): HTMLButtonElement | null {
     return document.getElementById('btn-save') as HTMLButtonElement;
   }
@@ -484,4 +513,3 @@ export class EditorUI {
     return canvas;
   }
 }
-

@@ -127,6 +127,7 @@ export class Editor {
 
   setTool(tool: EditorTool): void {
     this.currentTool = tool;
+    this.entityPlacer.setActive(tool === EditorTool.Entity);
     console.log(`Tool set to: ${tool}`);
   }
 
@@ -554,10 +555,28 @@ export class Editor {
     return this.entityPlacer.getSelectedEntity();
   }
 
+  getSelectedEntityType(): string {
+    return this.entityPlacer.getSelectedEntityType();
+  }
+
+  setSelectedEntityType(type: string): void {
+    this.entityPlacer.setSelectedEntityType(type);
+    this.entityPlacer.applyTypeToSelectedEntity(type);
+  }
+
+  setEntitySnapToGrid(enabled: boolean): void {
+    this.entityPlacer.setSnapToGrid(enabled);
+  }
+
+  getEntitySnapToGrid(): boolean {
+    return this.entityPlacer.getSnapToGrid();
+  }
+
   loadLevel(level: Level): void {
     this.currentLevel = level;
     this.tilemapEditor = new TilemapEditor(level.tilemap, this.undoSystem, this.collisionSystem);
     this.entityPlacer = new EntityPlacer(level);
+    this.entityPlacer.setActive(this.currentTool === EditorTool.Entity);
     this.updateGridMetrics();
   }
 
