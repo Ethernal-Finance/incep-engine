@@ -550,6 +550,10 @@ export class Editor {
     return this.tilemapEditor;
   }
 
+  getSelectedEntity(): import('../data/Level').LevelEntity | null {
+    return this.entityPlacer.getSelectedEntity();
+  }
+
   loadLevel(level: Level): void {
     this.currentLevel = level;
     this.tilemapEditor = new TilemapEditor(level.tilemap, this.undoSystem, this.collisionSystem);

@@ -415,6 +415,34 @@ body {
   border-color: #5a5a5a;
 }
 
+.field-label {
+  font-size: 11px;
+  color: #b0b0b0;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.audio-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  background: #262626;
+}
+
+.audio-subtitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.audio-hint {
+  font-size: 11px;
+  color: #888;
+}
+
 .tileset-select {
   background: #3a3a3a;
   border: 1px solid #4a4a4a;

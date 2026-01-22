@@ -66,7 +66,6 @@ export class Game {
     if (!this.running) return;
 
     Time.update();
-    Input.update();
 
     if (this.currentScene && !this.paused) {
       this.currentScene.update(Time.getDeltaTime());
@@ -78,6 +77,8 @@ export class Game {
       this.currentScene.render(this.renderer);
     }
 
+    // Clear per-frame input after scene update/render.
+    Input.update();
     this.animationFrameId = requestAnimationFrame(this.gameLoop);
   };
 }

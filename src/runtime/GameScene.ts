@@ -17,6 +17,7 @@ import { Transform } from '../components/Transform';
 import { Collider } from '../components/Collider';
 import { Vector2 } from '../utils/Vector2';
 import { Time } from '../engine/Time';
+import { AudioManager } from '../engine/AudioManager';
 
 export class GameScene extends Scene {
   private level: Level | null = null;
@@ -36,6 +37,9 @@ export class GameScene extends Scene {
   private frameDetectCtx: CanvasRenderingContext2D | null = null;
   private activeDoorKey: string | null = null;
   private loadingDoorTarget: string | null = null;
+  private colliderToEntity: Map<Collider, Entity> = new Map();
+  private entitySoundConfig: Map<string, { collision?: string; interact?: string }> = new Map();
+  private activePlayerCollisions: Set<string> = new Set();
 
   constructor() {
     super('GameScene');
@@ -65,6 +69,9 @@ export class GameScene extends Scene {
     this.walkFrameRow = 0;
     this.detectedFrameCounts.clear();
     this.activeDoorKey = null;
+    this.colliderToEntity.clear();
+    this.entitySoundConfig.clear();
+    this.activePlayerCollisions.clear();
 
     // Create entities from level data
     for (const levelEntity of level.entities) {
@@ -88,15 +95,20 @@ export class GameScene extends Scene {
           console.warn(`Unknown entity type: ${levelEntity.type}`);
       }
 
+      if (entity) {
+        this.registerCollider(entity);
+      }
+
       // Apply any custom properties
       if (entity && levelEntity.properties) {
-        // Properties can be applied to components if needed
+        this.applyEntitySoundProperties(entity, levelEntity.properties);
       }
     }
 
     if (this.level.spawnPoint) {
       if (!this.playerEntity) {
         this.playerEntity = Player.create(this.entitySystem, this.level.spawnPoint.x, this.level.spawnPoint.y);
+        this.registerCollider(this.playerEntity);
       } else {
         const transform = this.playerEntity.getComponent<Transform>('transform');
         if (transform) {
@@ -106,6 +118,7 @@ export class GameScene extends Scene {
       }
     } else if (!this.playerEntity) {
       this.playerEntity = Player.create(this.entitySystem, 0, 0);
+      this.registerCollider(this.playerEntity);
     }
 
     // Set camera to follow player
@@ -115,6 +128,8 @@ export class GameScene extends Scene {
         this.cameraSystem.camera.setTarget(transform);
       }
     }
+
+    this.applyLevelBackgroundSound();
   }
 
   update(deltaTime: number): void {
@@ -152,6 +167,8 @@ export class GameScene extends Scene {
     // AnimationSystem requires animation states array - skip for now as entities don't have animation states yet
     // this.animationSystem.update(deltaTime, []);
     this.combatSystem.update(deltaTime);
+
+    this.updatePlayerAudioTriggers();
 
     if (this.level && playerTransform && playerCollider && prevPlayerPos) {
       playerCollider.setPosition(playerTransform.position.x, playerTransform.position.y);
@@ -205,6 +222,63 @@ export class GameScene extends Scene {
       }
     }
 
+  }
+
+  private applyEntitySoundProperties(entity: Entity, properties: Record<string, any>): void {
+    const collisionSound = typeof properties.soundOnCollision === 'string'
+      ? properties.soundOnCollision.trim()
+      : '';
+    const interactSound = typeof properties.soundOnInteract === 'string'
+      ? properties.soundOnInteract.trim()
+      : '';
+    const hasSound = collisionSound.length > 0 || interactSound.length > 0;
+    if (hasSound) {
+      this.entitySoundConfig.set(entity.id, {
+        collision: collisionSound || undefined,
+        interact: interactSound || undefined
+      });
+    }
+
+  }
+
+  private registerCollider(entity: Entity): void {
+    const collider = entity.getComponent<Collider>('collider');
+    if (collider) {
+      this.colliderToEntity.set(collider, entity);
+    }
+  }
+
+  private applyLevelBackgroundSound(): void {
+    if (!this.level || !this.level.backgroundSound) {
+      AudioManager.stopBackground();
+      return;
+    }
+    AudioManager.playBackground(this.level.backgroundSound);
+  }
+
+  private updatePlayerAudioTriggers(): void {
+    if (!this.playerEntity) return;
+    const playerCollider = this.playerEntity.getComponent<Collider>('collider');
+    if (!playerCollider) return;
+
+    const nextCollisions: Set<string> = new Set();
+    const interactPressed = Input.getKeyDown('e') || Input.getKeyDown('E');
+
+    for (const [collider, entity] of this.colliderToEntity.entries()) {
+      if (entity.id === this.playerEntity.id) continue;
+      if (!playerCollider.bounds.intersects(collider.bounds)) continue;
+
+      nextCollisions.add(entity.id);
+      const config = this.entitySoundConfig.get(entity.id);
+      if (config?.collision && !this.activePlayerCollisions.has(entity.id)) {
+        AudioManager.playSound(config.collision);
+      }
+      if (interactPressed && config?.interact) {
+        AudioManager.playSound(config.interact);
+      }
+    }
+
+    this.activePlayerCollisions = nextCollisions;
   }
 
   private isCollidingWithTilemap(collider: Collider, tilemap: Level['tilemap']): boolean {
@@ -540,6 +614,10 @@ export class GameScene extends Scene {
     });
     this.level = null;
     this.playerEntity = null;
+    this.colliderToEntity.clear();
+    this.entitySoundConfig.clear();
+    this.activePlayerCollisions.clear();
+    AudioManager.stopBackground();
   }
 }
 

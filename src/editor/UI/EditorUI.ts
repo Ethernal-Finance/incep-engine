@@ -126,6 +126,19 @@ export class EditorUI {
         </div>
       </div>
       <div class="sidebar-section">
+        <h3>Audio</h3>
+        <label class="field-label" for="level-bg-sound">Background</label>
+        <input type="text" class="search-input" id="level-bg-sound" placeholder="e.g. ambience.mp3">
+        <div class="audio-subsection">
+          <div class="audio-subtitle">Selected entity</div>
+          <label class="field-label" for="entity-sound-collision">On collision</label>
+          <input type="text" class="search-input" id="entity-sound-collision" placeholder="e.g. hit.wav">
+          <label class="field-label" for="entity-sound-interact">On interact (E)</label>
+          <input type="text" class="search-input" id="entity-sound-interact" placeholder="e.g. talk.mp3">
+          <div class="audio-hint">Select with Entity tool to edit.</div>
+        </div>
+      </div>
+      <div class="sidebar-section">
         <h3>Assets</h3>
         <input type="text" class="search-input" placeholder="Search assets...">
       </div>
@@ -333,6 +346,18 @@ export class EditorUI {
 
   getLevelNameInput(): HTMLInputElement | null {
     return document.getElementById('level-name-input') as HTMLInputElement;
+  }
+
+  getBackgroundSoundInput(): HTMLInputElement | null {
+    return document.getElementById('level-bg-sound') as HTMLInputElement;
+  }
+
+  getEntityCollisionSoundInput(): HTMLInputElement | null {
+    return document.getElementById('entity-sound-collision') as HTMLInputElement;
+  }
+
+  getEntityInteractSoundInput(): HTMLInputElement | null {
+    return document.getElementById('entity-sound-interact') as HTMLInputElement;
   }
 
   getSaveButton(): HTMLButtonElement | null {

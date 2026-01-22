@@ -15,6 +15,7 @@ class EditorApp {
   private runtimeMode: boolean = false;
   private runtimeGame: Game | null = null;
   private runtimeScene: GameScene | null = null;
+  private lastSelectedEntityId: string | null = null;
 
   constructor() {
     const container = document.getElementById('editor-container');
@@ -128,6 +129,29 @@ class EditorApp {
         this.editorUI.updateLayersTitle(level.name);
       });
     }
+
+    const backgroundSoundInput = this.editorUI.getBackgroundSoundInput();
+    if (backgroundSoundInput) {
+      backgroundSoundInput.addEventListener('change', (e) => {
+        const level = this.editor.getLevel();
+        const value = (e.target as HTMLInputElement).value.trim();
+        level.backgroundSound = value.length > 0 ? value : null;
+      });
+    }
+
+    const collisionSoundInput = this.editorUI.getEntityCollisionSoundInput();
+    if (collisionSoundInput) {
+      collisionSoundInput.addEventListener('change', (e) => {
+        this.updateSelectedEntitySound('soundOnCollision', (e.target as HTMLInputElement).value);
+      });
+    }
+
+    const interactSoundInput = this.editorUI.getEntityInteractSoundInput();
+    if (interactSoundInput) {
+      interactSoundInput.addEventListener('change', (e) => {
+        this.updateSelectedEntitySound('soundOnInteract', (e.target as HTMLInputElement).value);
+      });
+    }
     
     // Wire save button
     const saveBtn = this.editorUI.getSaveButton();
@@ -185,6 +209,7 @@ class EditorApp {
           }
           this.editorUI.updateLayersTitle(level.name);
           this.updateLayerSelector();
+          this.syncAudioPanel();
 
           const levelData = JSON.stringify(levelJson, null, 2);
           this.registerLevel(level.name, levelData);
@@ -253,6 +278,7 @@ class EditorApp {
       this.editorUI.updateMousePosition(mousePos.x, mousePos.y);
       this.editorUI.updateActiveLayer(this.editor.getActiveLayer());
       this.editorUI.updateZoom(this.editor.getZoom());
+      this.syncAudioPanel();
     };
 
     // Keyboard shortcuts for tools
@@ -421,6 +447,7 @@ class EditorApp {
 
   private async preloadAssets(level: Level): Promise<void> {
     const { AssetLoader } = await import('../engine/AssetLoader');
+    const { AudioManager } = await import('../engine/AudioManager');
     const assetsToLoad: Array<{ path: string; name: string }> = [];
 
     // Load tileset - check if already loaded, if not try to load from path
@@ -466,6 +493,31 @@ class EditorApp {
     });
 
     await Promise.all(loadPromises);
+
+    const soundRefs = new Set<string>();
+    if (level.backgroundSound) {
+      soundRefs.add(level.backgroundSound);
+    }
+    for (const entity of level.entities) {
+      const properties = entity.properties || {};
+      if (typeof properties.soundOnCollision === 'string') {
+        soundRefs.add(properties.soundOnCollision);
+      }
+      if (typeof properties.soundOnInteract === 'string') {
+        soundRefs.add(properties.soundOnInteract);
+      }
+    }
+
+    const soundPromises = Array.from(soundRefs).map((soundRef) => {
+      const trimmed = soundRef.trim();
+      if (!trimmed) return Promise.resolve();
+      const path = AudioManager.resolvePath(trimmed);
+      return AudioManager.loadSound(path, trimmed).catch((error) => {
+        console.warn(`Failed to load sound ${trimmed}:`, error);
+      });
+    });
+
+    await Promise.all(soundPromises);
   }
 
   private stopRuntime(): void {
@@ -483,6 +535,58 @@ class EditorApp {
     if (!this.runtimeMode || !this.runtimeGame) return;
 
     this.runtimeGame.togglePause();
+  }
+
+  private updateSelectedEntitySound(key: 'soundOnCollision' | 'soundOnInteract', value: string): void {
+    const entity = this.editor.getSelectedEntity();
+    if (!entity) return;
+    const trimmed = value.trim();
+    if (!entity.properties) {
+      entity.properties = {};
+    }
+    if (trimmed.length === 0) {
+      delete entity.properties[key];
+    } else {
+      entity.properties[key] = trimmed;
+    }
+  }
+
+  private syncAudioPanel(): void {
+    const level = this.editor.getLevel();
+    const backgroundInput = this.editorUI.getBackgroundSoundInput();
+    if (backgroundInput && document.activeElement !== backgroundInput) {
+      const desired = level.backgroundSound || '';
+      if (backgroundInput.value !== desired) {
+        backgroundInput.value = desired;
+      }
+    }
+
+    const selectedEntity = this.editor.getSelectedEntity();
+    const selectedId = selectedEntity?.id ?? null;
+    const collisionInput = this.editorUI.getEntityCollisionSoundInput();
+    const interactInput = this.editorUI.getEntityInteractSoundInput();
+    if (!collisionInput || !interactInput) return;
+
+    const inputsDisabled = !selectedEntity;
+    if (collisionInput.disabled !== inputsDisabled) {
+      collisionInput.disabled = inputsDisabled;
+    }
+    if (interactInput.disabled !== inputsDisabled) {
+      interactInput.disabled = inputsDisabled;
+    }
+
+    if (selectedId !== this.lastSelectedEntityId) {
+      const props = selectedEntity?.properties || {};
+      const collisionValue = typeof props.soundOnCollision === 'string' ? props.soundOnCollision : '';
+      const interactValue = typeof props.soundOnInteract === 'string' ? props.soundOnInteract : '';
+      if (document.activeElement !== collisionInput) {
+        collisionInput.value = collisionValue;
+      }
+      if (document.activeElement !== interactInput) {
+        interactInput.value = interactValue;
+      }
+      this.lastSelectedEntityId = selectedId;
+    }
   }
 }
 

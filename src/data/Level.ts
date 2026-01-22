@@ -21,6 +21,7 @@ export class Level {
   public entities: LevelEntity[];
   public spawnPoint: { x: number; y: number } | null;
   public doors: LevelDoor[];
+  public backgroundSound: string | null;
 
   constructor(name: string = 'Level 1', version: string = '1.0') {
     this.version = version;
@@ -30,6 +31,7 @@ export class Level {
     this.entities = [];
     this.spawnPoint = null;
     this.doors = [];
+    this.backgroundSound = null;
   }
 
   addEntity(entity: LevelEntity): void {
@@ -66,7 +68,8 @@ export class Level {
       tilemap: this.tilemap.toJSON(),
       entities: this.entities,
       spawnPoint: this.spawnPoint,
-      doors
+      doors,
+      backgroundSound: this.backgroundSound
     };
   }
 
@@ -76,6 +79,7 @@ export class Level {
     level.entities = data.entities || [];
     level.spawnPoint = data.spawnPoint || null;
     level.doors = data.doors || [];
+    level.backgroundSound = data.backgroundSound || null;
     return level;
   }
 }
