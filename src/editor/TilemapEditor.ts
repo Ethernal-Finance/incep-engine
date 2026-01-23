@@ -128,7 +128,7 @@ export class TilemapEditor {
     const clampedY = Math.max(0, Math.min(this.tilemap.height - 1, tileY));
     this.hoverCell = new Vector2(clampedX, clampedY);
 
-    const activeLayer = this.tilemap.layers[this.activeLayerIndex];
+    const activeLayer = this.tilemap.getLayerByIndex(this.activeLayerIndex);
     if (!activeLayer) {
       console.warn('No active layer found!');
       return;
@@ -136,11 +136,11 @@ export class TilemapEditor {
 
     // Helper functions for painting tools
     const getTile = (x: number, y: number): number => {
-      return this.tilemap.getTile(activeLayer.name, x, y);
+      return this.tilemap.getTileByIndex(this.activeLayerIndex, x, y);
     };
     
     const setTile = (x: number, y: number, tileId: number): void => {
-      this.tilemap.setTile(activeLayer.name, x, y, tileId, this.selectedTileset);
+      this.tilemap.setTileByIndex(this.activeLayerIndex, x, y, tileId, this.selectedTileset);
     };
 
     // Handle Paint/Brush tools
@@ -267,7 +267,7 @@ export class TilemapEditor {
       // Right click - erase (always works regardless of tool)
       if (Input.getMouseButton(2)) {
         if (activeLayer) {
-          this.tilemap.setTile(activeLayer.name, clampedX, clampedY, 0);
+          this.tilemap.setTileByIndex(this.activeLayerIndex, clampedX, clampedY, 0);
         }
       }
     }
@@ -277,7 +277,7 @@ export class TilemapEditor {
       const pickedTile = this.paintingTools.pickTile(clampedX, clampedY, getTile);
       if (pickedTile > 0) {
         this.setSelectedTile(pickedTile);
-        const pickedTileset = this.tilemap.getTileTileset(activeLayer.name, clampedX, clampedY);
+        const pickedTileset = this.tilemap.getTileTilesetByIndex(this.activeLayerIndex, clampedX, clampedY);
         if (pickedTileset) {
           this.setSelectedTileset(pickedTileset);
         }
@@ -294,7 +294,7 @@ export class TilemapEditor {
         
         // Erase tile immediately on click
         if (clampedX >= 0 && clampedX < this.tilemap.width && clampedY >= 0 && clampedY < this.tilemap.height) {
-          this.tilemap.setTile(activeLayer.name, clampedX, clampedY, 0);
+          this.tilemap.setTileByIndex(this.activeLayerIndex, clampedX, clampedY, 0);
         }
       }
 
@@ -311,7 +311,7 @@ export class TilemapEditor {
         // Erase the rectangle
         for (let y = minY; y <= maxY; y++) {
           for (let x = minX; x <= maxX; x++) {
-            this.tilemap.setTile(activeLayer.name, x, y, 0);
+            this.tilemap.setTileByIndex(this.activeLayerIndex, x, y, 0);
           }
         }
       }
