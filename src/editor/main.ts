@@ -7,6 +7,7 @@ import { Game } from '../engine/Game';
 import { GameScene } from '../runtime/GameScene';
 import { Vector2 } from '../utils/Vector2';
 import walkSpriteUrl from '../../assets/walk.png';
+import { createRandomSelection, registerCompositeSprite, type CharGenSelection } from '../char-gen';
 
 const enemyAssetImports = import.meta.glob('../../assets/Enemy/*.png', {
   eager: true,
@@ -53,6 +54,127 @@ const normalizeEnemySpriteKey = (raw: string | null | undefined): string | null 
   return trimmed;
 };
 
+const npcAssetImports = {
+  ...import.meta.glob('../../assets/lpc/**/*.png', {
+    eager: true,
+    import: 'default'
+  }),
+  ...import.meta.glob('../../assets/LPC/**/*.png', {
+    eager: true,
+    import: 'default'
+  })
+} as Record<string, string>;
+
+type NpcAssetOption = {
+  key: string;
+  label: string;
+  url: string;
+  race: string;
+};
+
+const parseNpcAssetOption = (path: string, url: string): NpcAssetOption => {
+  const normalized = path.replace(/\\/g, '/');
+  const lpcSplit = normalized.split(/\/lpc\//i);
+  const relative = lpcSplit.length > 1 ? lpcSplit[lpcSplit.length - 1] : normalized;
+  const segments = relative.split('/').filter(Boolean);
+  const fileName = segments.pop() ?? 'npc';
+  const baseName = fileName.replace(/\.[^/.]+$/, '');
+  const raceFromFolder = segments.length > 0 ? segments[0] : '';
+  const raceFromName = baseName.split(/[_-]/)[0] ?? '';
+  const race = (raceFromFolder || raceFromName || 'unknown').toLowerCase();
+  const assetId = segments.length > 0 ? `${segments.join('/')}/${baseName}` : baseName;
+  return {
+    key: `npc:${assetId}`,
+    label: assetId,
+    url,
+    race
+  };
+};
+
+const npcAssetOptions = Object.entries(npcAssetImports)
+  .map(([path, url]) => parseNpcAssetOption(path, url))
+  .sort((a, b) => a.label.localeCompare(b.label));
+
+const npcAssetKeyByLabel = new Map(
+  npcAssetOptions.map((asset) => [asset.label.toLowerCase(), asset.key])
+);
+
+const npcAssetUrlMap = new Map(npcAssetOptions.map((asset) => [asset.key, asset.url]));
+
+const npcAssetsByRace = npcAssetOptions.reduce((acc, asset) => {
+  const existing = acc.get(asset.race) ?? [];
+  existing.push(asset);
+  acc.set(asset.race, existing);
+  return acc;
+}, new Map<string, NpcAssetOption[]>());
+
+const formatNpcRaceLabel = (race: string): string => {
+  if (!race) return 'Unknown';
+  return race.charAt(0).toUpperCase() + race.slice(1);
+};
+
+const npcRaceOptions = [
+  { value: 'any', label: 'Any' },
+  ...Array.from(npcAssetsByRace.keys())
+    .sort((a, b) => a.localeCompare(b))
+    .map((race) => ({ value: race, label: formatNpcRaceLabel(race) }))
+];
+
+const normalizeNpcSpriteKey = (raw: string | null | undefined): string | null => {
+  const trimmed = raw?.trim() ?? '';
+  if (!trimmed) return null;
+  if (npcAssetUrlMap.has(trimmed)) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+
+  if (trimmed.startsWith('npc:')) {
+    const fallback = trimmed.slice('npc:'.length).trim().toLowerCase();
+    return npcAssetKeyByLabel.get(fallback) ?? trimmed;
+  }
+
+  const lower = trimmed.toLowerCase();
+  return npcAssetKeyByLabel.get(lower) ?? trimmed;
+};
+
+const resolveNpcCharGenSelection = (value: unknown): CharGenSelection | null => {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return typeof parsed === 'object' && parsed ? (parsed as CharGenSelection) : null;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value === 'object') {
+    return value as CharGenSelection;
+  }
+  return null;
+};
+
+const resolveNpcSource = (entity?: LevelEntity | null): 'asset' | 'generated' => {
+  const props = entity?.properties ?? {};
+  if (props.npcCharGenSelection) return 'generated';
+  const spriteKey = typeof props.npcSprite === 'string' ? props.npcSprite.trim() : '';
+  if (spriteKey.startsWith('npc:generated:')) return 'generated';
+  return 'asset';
+};
+
+const buildGeneratedNpcKey = (entityId: string, fallbackId?: number): string => {
+  const suffix = fallbackId ?? Date.now();
+  return `npc:generated:${entityId || `npc_${suffix}`}`;
+};
+
+const getNpcAssetsForRace = (race: string | null): NpcAssetOption[] => {
+  if (!race || race === 'any') return npcAssetOptions;
+  return npcAssetsByRace.get(race) ?? [];
+};
+
+const pickRandomNpcAsset = (assets: NpcAssetOption[]): NpcAssetOption | null => {
+  if (assets.length === 0) return null;
+  const index = Math.floor(Math.random() * assets.length);
+  return assets[index] ?? null;
+};
+
 const enemyAIOptions = [
   { value: 'idle', label: 'Idle' },
   { value: 'wander', label: 'Wander' },
@@ -70,6 +192,7 @@ class EditorApp {
   private runtimeScene: GameScene | null = null;
   private lastSelectedEntityId: string | null = null;
   private enemyAssets = enemyAssetOptions;
+  private npcRaces = npcRaceOptions;
   private openTabs: Map<string, { name: string; data: string }> = new Map();
   private activeTabId: string | null = null;
   private nextTabId = 1;
@@ -684,6 +807,46 @@ class EditorApp {
       }
     }
 
+    const npcSpriteKeys = new Set<string>();
+    const npcCharGenTasks: Promise<void>[] = [];
+    for (const entity of level.entities) {
+      if (entity.type !== 'npc') continue;
+      const selection = resolveNpcCharGenSelection(entity.properties?.npcCharGenSelection);
+      if (selection) {
+        const spriteKey = typeof entity.properties?.npcGeneratedKey === 'string'
+          ? entity.properties.npcGeneratedKey
+          : buildGeneratedNpcKey(entity.id);
+        if (!entity.properties) {
+          entity.properties = {};
+        }
+        entity.properties.npcGeneratedKey = spriteKey;
+        entity.properties.npcSprite = spriteKey;
+        npcCharGenTasks.push(registerCompositeSprite(spriteKey, selection).then(() => undefined));
+      }
+      const spriteKey = normalizeNpcSpriteKey(
+        typeof entity.properties?.npcSprite === 'string'
+          ? entity.properties.npcSprite
+          : ''
+      );
+      if (spriteKey) {
+        npcSpriteKeys.add(spriteKey);
+      }
+    }
+
+    if (npcCharGenTasks.length > 0) {
+      await Promise.all(npcCharGenTasks);
+    }
+
+    for (const spriteKey of npcSpriteKeys) {
+      if (!AssetLoader.getImage(spriteKey)) {
+        const url = npcAssetUrlMap.get(spriteKey) ?? spriteKey;
+        assetsToLoad.push({
+          path: url,
+          name: spriteKey
+        });
+      }
+    }
+
     if (!AssetLoader.getImage('walk')) {
       assetsToLoad.push({
         path: walkSpriteUrl,
@@ -802,11 +965,67 @@ class EditorApp {
     const snapToggle = this.editorUI.getEntitySnapToggle();
     const enemySelect = this.editorUI.getEnemyAssetSelect();
     const enemyAISelect = this.editorUI.getEnemyAISelect();
+    const npcRaceSelect = this.editorUI.getNpcRaceSelect();
+    const npcAssetSelect = this.editorUI.getNpcAssetSelect();
+    const npcRandomizeButton = this.editorUI.getNpcRandomizeButton();
+    const npcSourceSelect = this.editorUI.getNpcSourceSelect();
+    const npcGeneratorRow = this.editorUI.getNpcGeneratorRow();
+    const npcGeneratorButton = this.editorUI.getNpcGeneratorButton();
+
+    const applyNpcCharGenSelection = (
+      entity: LevelEntity | null,
+      selection: CharGenSelection | null,
+      spriteKey: string | null
+    ) => {
+      if (!entity || entity.type !== 'npc') return;
+      if (!entity.properties) {
+        entity.properties = {};
+      }
+      if (!selection) {
+        delete entity.properties.npcCharGenSelection;
+        delete entity.properties.npcGeneratedKey;
+        if (spriteKey && spriteKey.startsWith('npc:generated:')) {
+          entity.properties.npcSprite = spriteKey;
+        }
+        if (Object.keys(entity.properties).length === 0) {
+          delete entity.properties;
+        }
+        return;
+      }
+      entity.properties.npcCharGenSelection = selection;
+      if (spriteKey) {
+        entity.properties.npcGeneratedKey = spriteKey;
+        entity.properties.npcSprite = spriteKey;
+      }
+    };
+
+    const setNpcSourceUI = (source: 'asset' | 'generated') => {
+      if (npcSourceSelect && npcSourceSelect.value !== source) {
+        npcSourceSelect.value = source;
+      }
+      if (npcGeneratorRow) {
+        npcGeneratorRow.hidden = source !== 'generated';
+      }
+      const disableAssetControls = source === 'generated';
+      if (npcRaceSelect) npcRaceSelect.disabled = disableAssetControls;
+      if (npcAssetSelect) npcAssetSelect.disabled = disableAssetControls;
+      if (npcRandomizeButton) npcRandomizeButton.disabled = disableAssetControls;
+    };
+
+    const generateNpcSprite = async (entity: LevelEntity | null) => {
+      const selection = createRandomSelection({ allowNone: true });
+      const spriteKey = buildGeneratedNpcKey(entity?.id ?? '', Date.now());
+      await registerCompositeSprite(spriteKey, selection);
+      this.editor.setSelectedNpcSprite(spriteKey);
+      this.editor.setSelectedNpcCharGenSelection(selection);
+      applyNpcCharGenSelection(entity, selection, spriteKey);
+    };
 
     const syncType = () => {
       const nextType = this.getSelectedEntityTypeFromUI();
       this.editor.setSelectedEntityType(nextType);
       this.updateEnemyControlsVisibility(nextType);
+      this.updateNpcControlsVisibility(nextType);
       if (customInput && typeSelect) {
         const isCustom = typeSelect.value === 'custom';
         customInput.disabled = !isCustom;
@@ -825,6 +1044,35 @@ class EditorApp {
         this.editor.setSelectedEnemyAI(selectedAI);
         if (selectedEntity && selectedEntity.type === 'enemy') {
           this.applyEnemyAIToEntity(selectedEntity, selectedAI);
+        }
+      }
+      if (nextType === 'npc') {
+        const source = npcSourceSelect?.value === 'generated' ? 'generated' : 'asset';
+        setNpcSourceUI(source);
+        const selectedRace = this.getSelectedNpcRaceFromUI();
+        this.editor.setSelectedNpcRace(selectedRace);
+        const selectedEntity = this.editor.getSelectedEntity();
+        if (source === 'generated') {
+          const selection = resolveNpcCharGenSelection(selectedEntity?.properties?.npcCharGenSelection);
+          if (selection) {
+            this.editor.setSelectedNpcCharGenSelection(selection);
+          }
+          if (selectedEntity && selectedEntity.type === 'npc') {
+            this.applyNpcSpriteToEntity(selectedEntity, this.editor.getSelectedNpcSprite());
+          }
+        } else {
+          let selectedSprite = this.getSelectedNpcSpriteFromUI();
+          if (!selectedSprite) {
+            selectedSprite = this.getRandomNpcSpriteKey(selectedRace);
+            if (npcAssetSelect) {
+              this.populateNpcAssetSelect(npcAssetSelect, selectedRace, selectedSprite);
+            }
+          }
+          this.editor.setSelectedNpcSprite(selectedSprite);
+          if (selectedEntity && selectedEntity.type === 'npc') {
+            this.applyNpcRaceToEntity(selectedEntity, selectedRace);
+            this.applyNpcSpriteToEntity(selectedEntity, selectedSprite);
+          }
         }
       }
     };
@@ -868,6 +1116,85 @@ class EditorApp {
         const selectedEntity = this.editor.getSelectedEntity();
         if (selectedEntity && selectedEntity.type === 'enemy') {
           this.applyEnemyAIToEntity(selectedEntity, selectedAI);
+        }
+      });
+    }
+
+    if (npcRaceSelect) {
+      this.populateNpcRaceSelect(npcRaceSelect);
+      npcRaceSelect.addEventListener('change', () => {
+        const selectedRace = this.getSelectedNpcRaceFromUI();
+        this.editor.setSelectedNpcRace(selectedRace);
+        if (npcAssetSelect) {
+          const desiredSprite = this.ensureNpcSpriteForRace(selectedRace, this.getSelectedNpcSpriteFromUI());
+          this.populateNpcAssetSelect(npcAssetSelect, selectedRace, desiredSprite);
+          if (npcRandomizeButton) {
+            npcRandomizeButton.disabled = getNpcAssetsForRace(selectedRace).length === 0;
+          }
+          this.editor.setSelectedNpcSprite(desiredSprite);
+          const selectedEntity = this.editor.getSelectedEntity();
+          if (selectedEntity && selectedEntity.type === 'npc') {
+            this.applyNpcRaceToEntity(selectedEntity, selectedRace);
+            this.applyNpcSpriteToEntity(selectedEntity, desiredSprite);
+          }
+        }
+      });
+    }
+
+    if (npcAssetSelect) {
+      this.populateNpcAssetSelect(npcAssetSelect, this.getSelectedNpcRaceFromUI(), this.getSelectedNpcSpriteFromUI());
+      if (npcRandomizeButton) {
+        npcRandomizeButton.disabled = getNpcAssetsForRace(this.getSelectedNpcRaceFromUI()).length === 0;
+      }
+      npcAssetSelect.addEventListener('change', () => {
+        const selectedSprite = this.getSelectedNpcSpriteFromUI();
+        this.editor.setSelectedNpcSprite(selectedSprite);
+        const selectedEntity = this.editor.getSelectedEntity();
+        if (selectedEntity && selectedEntity.type === 'npc') {
+          this.applyNpcSpriteToEntity(selectedEntity, selectedSprite);
+        }
+      });
+    }
+
+    if (npcRandomizeButton) {
+      npcRandomizeButton.addEventListener('click', () => {
+        const selectedRace = this.getSelectedNpcRaceFromUI();
+        const randomSprite = this.getRandomNpcSpriteKey(selectedRace);
+        if (npcAssetSelect) {
+          this.populateNpcAssetSelect(npcAssetSelect, selectedRace, randomSprite);
+        }
+        this.editor.setSelectedNpcSprite(randomSprite);
+        const selectedEntity = this.editor.getSelectedEntity();
+        if (selectedEntity && selectedEntity.type === 'npc') {
+          this.applyNpcSpriteToEntity(selectedEntity, randomSprite);
+        }
+      });
+    }
+
+    if (npcSourceSelect) {
+      npcSourceSelect.addEventListener('change', () => {
+        const source = npcSourceSelect.value === 'generated' ? 'generated' : 'asset';
+        setNpcSourceUI(source);
+        const selectedEntity = this.editor.getSelectedEntity();
+        if (source === 'asset') {
+          this.editor.setSelectedNpcCharGenSelection(null);
+          applyNpcCharGenSelection(selectedEntity ?? null, null, this.editor.getSelectedNpcSprite());
+        }
+      });
+    }
+
+    if (npcGeneratorButton) {
+      npcGeneratorButton.addEventListener('click', async () => {
+        try {
+          npcGeneratorButton.disabled = true;
+          const selectedEntity = this.editor.getSelectedEntity();
+          await generateNpcSprite(selectedEntity ?? null);
+          setNpcSourceUI('generated');
+        } catch (error) {
+          console.error('Failed to generate NPC sprite:', error);
+          alert('Failed to generate NPC sprite. Check console for details.');
+        } finally {
+          npcGeneratorButton.disabled = false;
         }
       });
     }
@@ -923,6 +1250,24 @@ class EditorApp {
     return value.length > 0 ? value : null;
   }
 
+  private getSelectedNpcRaceFromUI(): string | null {
+    const raceSelect = this.editorUI.getNpcRaceSelect();
+    if (!raceSelect) {
+      return this.editor.getSelectedNpcRace();
+    }
+    const value = raceSelect.value.trim();
+    return value.length > 0 ? value : null;
+  }
+
+  private getSelectedNpcSpriteFromUI(): string | null {
+    const npcSelect = this.editorUI.getNpcAssetSelect();
+    if (!npcSelect) {
+      return this.editor.getSelectedNpcSprite();
+    }
+    const value = npcSelect.value.trim();
+    return normalizeNpcSpriteKey(value.length > 0 ? value : null);
+  }
+
   private populateEnemyAISelect(select: HTMLSelectElement): void {
     select.innerHTML = '';
     enemyAIOptions.forEach((option) => {
@@ -933,6 +1278,62 @@ class EditorApp {
     });
   }
 
+  private populateNpcRaceSelect(select: HTMLSelectElement): void {
+    select.innerHTML = '';
+    this.npcRaces.forEach((race) => {
+      const option = document.createElement('option');
+      option.value = race.value;
+      option.textContent = race.label;
+      select.appendChild(option);
+    });
+  }
+
+  private populateNpcAssetSelect(
+    select: HTMLSelectElement,
+    race: string | null,
+    selectedSprite: string | null
+  ): void {
+    select.innerHTML = '';
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Default';
+    select.appendChild(defaultOption);
+
+    const options = getNpcAssetsForRace(race);
+    if (options.length === 0) {
+      const emptyOption = document.createElement('option');
+      emptyOption.value = '';
+      emptyOption.textContent = 'No LPC assets found';
+      emptyOption.disabled = true;
+      select.appendChild(emptyOption);
+    } else {
+      options.forEach((asset) => {
+        const option = document.createElement('option');
+        option.value = asset.key;
+        option.textContent = asset.label;
+        select.appendChild(option);
+      });
+    }
+
+    const normalized = normalizeNpcSpriteKey(selectedSprite);
+    select.value = normalized ?? '';
+  }
+
+  private ensureNpcSpriteForRace(race: string | null, selectedSprite: string | null): string | null {
+    const assets = getNpcAssetsForRace(race);
+    if (assets.length === 0) return null;
+    const normalized = normalizeNpcSpriteKey(selectedSprite);
+    if (normalized && assets.some((asset) => asset.key === normalized)) {
+      return normalized;
+    }
+    return pickRandomNpcAsset(assets)?.key ?? null;
+  }
+
+  private getRandomNpcSpriteKey(race: string | null): string | null {
+    const assets = getNpcAssetsForRace(race);
+    return pickRandomNpcAsset(assets)?.key ?? null;
+  }
+
   private updateEnemyControlsVisibility(activeType: string): void {
     const assetRow = this.editorUI.getEnemyAssetRow();
     if (assetRow) {
@@ -941,6 +1342,13 @@ class EditorApp {
     const aiRow = this.editorUI.getEnemyAIRow();
     if (aiRow) {
       aiRow.hidden = activeType !== 'enemy';
+    }
+  }
+
+  private updateNpcControlsVisibility(activeType: string): void {
+    const npcRow = this.editorUI.getNpcAssetRow();
+    if (npcRow) {
+      npcRow.hidden = activeType !== 'npc';
     }
   }
 
@@ -980,12 +1388,53 @@ class EditorApp {
     entity.properties.enemySprite = normalized;
   }
 
+  private applyNpcRaceToEntity(entity: LevelEntity, race: string | null): void {
+    if (!entity) return;
+    const trimmed = race?.trim() ?? '';
+    if (!trimmed || trimmed === 'any') {
+      if (entity.properties && 'npcRace' in entity.properties) {
+        delete entity.properties.npcRace;
+        if (Object.keys(entity.properties).length === 0) {
+          delete entity.properties;
+        }
+      }
+      return;
+    }
+    if (!entity.properties) {
+      entity.properties = {};
+    }
+    entity.properties.npcRace = trimmed;
+  }
+
+  private applyNpcSpriteToEntity(entity: LevelEntity, spriteKey: string | null): void {
+    if (!entity) return;
+    const normalized = normalizeNpcSpriteKey(spriteKey);
+    if (!normalized) {
+      if (entity.properties && 'npcSprite' in entity.properties) {
+        delete entity.properties.npcSprite;
+        if (Object.keys(entity.properties).length === 0) {
+          delete entity.properties;
+        }
+      }
+      return;
+    }
+    if (!entity.properties) {
+      entity.properties = {};
+    }
+    entity.properties.npcSprite = normalized;
+  }
+
   private syncEntityPanel(): void {
     const typeSelect = this.editorUI.getEntityTypeSelect();
     const customInput = this.editorUI.getEntityCustomTypeInput();
     const snapToggle = this.editorUI.getEntitySnapToggle();
     const enemySelect = this.editorUI.getEnemyAssetSelect();
     const enemyAISelect = this.editorUI.getEnemyAISelect();
+    const npcRaceSelect = this.editorUI.getNpcRaceSelect();
+    const npcAssetSelect = this.editorUI.getNpcAssetSelect();
+    const npcRandomizeButton = this.editorUI.getNpcRandomizeButton();
+    const npcSourceSelect = this.editorUI.getNpcSourceSelect();
+    const npcGeneratorRow = this.editorUI.getNpcGeneratorRow();
     if (!typeSelect || !customInput || !snapToggle) return;
 
     const selectedEntity = this.editor.getSelectedEntity();
@@ -1019,6 +1468,7 @@ class EditorApp {
     }
 
     this.updateEnemyControlsVisibility(activeType);
+    this.updateNpcControlsVisibility(activeType);
 
     if (enemySelect) {
       const isEditingEnemy = activeElement === enemySelect;
@@ -1055,6 +1505,64 @@ class EditorApp {
         }
         if (selectedEntity && selectedEntity.type === 'enemy') {
           this.applyEnemyAIToEntity(selectedEntity, normalized.length > 0 ? normalized : null);
+        }
+      }
+    }
+
+    if (npcRaceSelect) {
+      const isEditingRace = activeElement === npcRaceSelect;
+      if (!isEditingRace) {
+        const desiredRace = typeof selectedEntity?.properties?.npcRace === 'string'
+          ? selectedEntity.properties.npcRace
+          : this.editor.getSelectedNpcRace();
+        const normalizedRace = desiredRace?.trim() ?? 'any';
+        if (npcRaceSelect.value !== normalizedRace) {
+          npcRaceSelect.value = normalizedRace;
+        }
+        if (this.editor.getSelectedNpcRace() !== normalizedRace) {
+          this.editor.setSelectedNpcRace(normalizedRace);
+        }
+        if (selectedEntity && selectedEntity.type === 'npc') {
+          this.applyNpcRaceToEntity(selectedEntity, normalizedRace);
+        }
+        if (npcRandomizeButton) {
+          npcRandomizeButton.disabled = getNpcAssetsForRace(normalizedRace).length === 0;
+        }
+      }
+    }
+
+    if (npcAssetSelect) {
+      const isEditingNpc = activeElement === npcAssetSelect;
+      const npcSource = resolveNpcSource(selectedEntity);
+      const isGenerated = npcSource === 'generated';
+      if (npcSourceSelect && npcSourceSelect.value !== npcSource) {
+        npcSourceSelect.value = npcSource;
+      }
+      if (npcGeneratorRow) {
+        npcGeneratorRow.hidden = !isGenerated;
+      }
+      if (npcRaceSelect) npcRaceSelect.disabled = isGenerated;
+      if (npcAssetSelect) npcAssetSelect.disabled = isGenerated;
+      if (npcRandomizeButton) npcRandomizeButton.disabled = isGenerated;
+
+      if (!isEditingNpc && !isGenerated) {
+        const rawSprite = typeof selectedEntity?.properties?.npcSprite === 'string'
+          ? selectedEntity.properties.npcSprite
+          : this.editor.getSelectedNpcSprite();
+        const normalizedKey = normalizeNpcSpriteKey(rawSprite);
+        const desiredRace = this.getSelectedNpcRaceFromUI();
+        this.populateNpcAssetSelect(npcAssetSelect, desiredRace, normalizedKey);
+        if (this.editor.getSelectedNpcSprite() !== normalizedKey) {
+          this.editor.setSelectedNpcSprite(normalizedKey);
+        }
+        if (selectedEntity && selectedEntity.type === 'npc') {
+          this.applyNpcSpriteToEntity(selectedEntity, normalizedKey);
+        }
+      }
+      if (isGenerated) {
+        const selection = resolveNpcCharGenSelection(selectedEntity?.properties?.npcCharGenSelection);
+        if (selection) {
+          this.editor.setSelectedNpcCharGenSelection(selection);
         }
       }
     }

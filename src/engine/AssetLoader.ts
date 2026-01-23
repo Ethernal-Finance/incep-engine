@@ -22,6 +22,15 @@ export class AssetLoader {
     AssetLoader.loaded = true;
   }
 
+  static registerImage(name: string, image: HTMLImageElement): void {
+    AssetLoader.images.set(name, image);
+    AssetLoader.loaded = true;
+  }
+
+  static async loadImageFromCanvas(canvas: HTMLCanvasElement, name: string): Promise<void> {
+    return AssetLoader.loadImage(canvas.toDataURL('image/png'), name);
+  }
+
   static getImage(name: string): HTMLImageElement | null {
     return AssetLoader.images.get(name) || null;
   }

@@ -16,6 +16,9 @@ export class EntityPlacer {
   private previewPosition: Vector2 | null = null;
   private selectedEnemySprite: string | null = null;
   private selectedEnemyAI: string | null = null;
+  private selectedNpcRace: string | null = null;
+  private selectedNpcSprite: string | null = null;
+  private selectedNpcCharGenSelection: Record<string, string | null> | null = null;
   private readonly typeSizeMultipliers: Record<string, number> = {
     player: 1,
     enemy: 1.1,
@@ -56,6 +59,32 @@ export class EntityPlacer {
 
   getSelectedEnemyAI(): string | null {
     return this.selectedEnemyAI;
+  }
+
+  setSelectedNpcRace(race: string | null): void {
+    const trimmed = race?.trim() ?? '';
+    this.selectedNpcRace = trimmed.length > 0 ? trimmed : null;
+  }
+
+  getSelectedNpcRace(): string | null {
+    return this.selectedNpcRace;
+  }
+
+  setSelectedNpcSprite(spriteName: string | null): void {
+    const trimmed = spriteName?.trim() ?? '';
+    this.selectedNpcSprite = trimmed.length > 0 ? trimmed : null;
+  }
+
+  getSelectedNpcSprite(): string | null {
+    return this.selectedNpcSprite;
+  }
+
+  setSelectedNpcCharGenSelection(selection: Record<string, string | null> | null): void {
+    this.selectedNpcCharGenSelection = selection ? { ...selection } : null;
+  }
+
+  getSelectedNpcCharGenSelection(): Record<string, string | null> | null {
+    return this.selectedNpcCharGenSelection ? { ...this.selectedNpcCharGenSelection } : null;
   }
 
   setSnapToGrid(enabled: boolean): void {
@@ -210,6 +239,17 @@ export class EntityPlacer {
       }
       if (this.selectedEnemyAI) {
         properties.enemyAI = this.selectedEnemyAI;
+      }
+    }
+    if (type === 'npc') {
+      if (this.selectedNpcRace) {
+        properties.npcRace = this.selectedNpcRace;
+      }
+      if (this.selectedNpcSprite) {
+        properties.npcSprite = this.selectedNpcSprite;
+      }
+      if (this.selectedNpcCharGenSelection) {
+        properties.npcCharGenSelection = this.selectedNpcCharGenSelection;
       }
     }
     const hasProperties = Object.keys(properties).length > 0;

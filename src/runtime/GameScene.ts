@@ -122,7 +122,14 @@ export class GameScene extends Scene {
           }
           break;
         case 'npc':
-          entity = NPC.create(this.entitySystem, levelEntity.x, levelEntity.y);
+          {
+            const rawSprite = typeof levelEntity.properties?.npcSprite === 'string'
+              ? levelEntity.properties.npcSprite.trim()
+              : '';
+            const spriteName = rawSprite.length > 0 ? rawSprite : 'npc';
+            const frameSize = spriteName.startsWith('npc:') ? 64 : 32;
+            entity = NPC.create(this.entitySystem, levelEntity.x, levelEntity.y, 'NPC', spriteName, frameSize);
+          }
           break;
         case 'item':
           entity = Item.create(this.entitySystem, levelEntity.x, levelEntity.y);

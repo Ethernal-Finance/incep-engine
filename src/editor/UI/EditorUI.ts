@@ -154,6 +154,26 @@ export class EditorUI {
           <label class="field-label" for="enemy-ai-select">Enemy AI</label>
           <select class="select-input" id="enemy-ai-select"></select>
         </div>
+        <div class="npc-asset-row" id="npc-asset-row" hidden>
+          <label class="field-label" for="npc-source-select">NPC Source</label>
+          <select class="select-input" id="npc-source-select">
+            <option value="asset">Asset</option>
+            <option value="generated">Generated</option>
+          </select>
+          <div class="npc-generator-row" id="npc-generator-row" hidden>
+            <div class="npc-generator-controls">
+              <button class="btn-small" id="npc-generator-btn" type="button">Generate</button>
+              <span class="npc-generator-hint">Builds a layered LPC sprite.</span>
+            </div>
+          </div>
+          <label class="field-label" for="npc-race-select">NPC Race</label>
+          <select class="select-input" id="npc-race-select"></select>
+          <label class="field-label" for="npc-asset-select">NPC Asset</label>
+          <div class="npc-asset-controls">
+            <select class="select-input" id="npc-asset-select"></select>
+            <button class="btn-small" id="npc-asset-random" type="button">Randomize</button>
+          </div>
+        </div>
         <label class="toggle-row" for="entity-snap-grid">
           <input type="checkbox" id="entity-snap-grid" checked>
           <span>Snap to grid</span>
@@ -423,6 +443,34 @@ export class EditorUI {
 
   getEnemyAIRow(): HTMLElement | null {
     return document.getElementById('enemy-ai-row');
+  }
+
+  getNpcAssetRow(): HTMLElement | null {
+    return document.getElementById('npc-asset-row');
+  }
+
+  getNpcRaceSelect(): HTMLSelectElement | null {
+    return document.getElementById('npc-race-select') as HTMLSelectElement;
+  }
+
+  getNpcSourceSelect(): HTMLSelectElement | null {
+    return document.getElementById('npc-source-select') as HTMLSelectElement;
+  }
+
+  getNpcGeneratorRow(): HTMLElement | null {
+    return document.getElementById('npc-generator-row');
+  }
+
+  getNpcGeneratorButton(): HTMLButtonElement | null {
+    return document.getElementById('npc-generator-btn') as HTMLButtonElement;
+  }
+
+  getNpcAssetSelect(): HTMLSelectElement | null {
+    return document.getElementById('npc-asset-select') as HTMLSelectElement;
+  }
+
+  getNpcRandomizeButton(): HTMLButtonElement | null {
+    return document.getElementById('npc-asset-random') as HTMLButtonElement;
   }
 
   getEntityPanel(): HTMLElement | null {

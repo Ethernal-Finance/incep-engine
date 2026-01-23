@@ -7,11 +7,22 @@ import { Health } from '../components/Health';
 import { Inventory } from '../components/Inventory';
 
 export class Player {
-  static create(entitySystem: any, x: number, y: number): Entity {
+  static create(
+    entitySystem: any,
+    x: number,
+    y: number,
+    spriteName: string = 'walk',
+    frameSize: number = 64
+  ): Entity {
     const player = entitySystem.createEntity('Player');
 
     player.addComponent('transform', new Transform(x, y));
-    player.addComponent('sprite', new Sprite('walk', 64, 64));
+    const sprite = new Sprite(spriteName, 64, 64);
+    if (frameSize > 0 && frameSize !== sprite.width) {
+      sprite.frameWidth = frameSize;
+      sprite.frameHeight = frameSize;
+    }
+    player.addComponent('sprite', sprite);
     player.addComponent(
       'collider',
       new Collider(0, 0, 28, 28, CollisionLayer.Player, false)

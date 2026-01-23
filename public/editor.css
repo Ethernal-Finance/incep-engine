@@ -474,6 +474,31 @@ body {
   border-color: #5a5a5a;
 }
 
+.npc-asset-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.npc-asset-controls .select-input {
+  flex: 1;
+}
+
+.npc-generator-row {
+  margin: 6px 0 10px;
+}
+
+.npc-generator-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.npc-generator-hint {
+  font-size: 11px;
+  color: #8b8b8b;
+}
+
 .toggle-row {
   display: flex;
   align-items: center;

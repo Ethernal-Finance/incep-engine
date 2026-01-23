@@ -62,6 +62,9 @@ export class Editor {
   private collisionSystem: CollisionSystem;
   private selectedEnemySprite: string | null = null;
   private selectedEnemyAI: string | null = null;
+  private selectedNpcRace: string | null = null;
+  private selectedNpcSprite: string | null = null;
+  private selectedNpcCharGenSelection: Record<string, string | null> | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.game = new Game(canvas);
@@ -622,6 +625,35 @@ export class Editor {
     return this.selectedEnemyAI;
   }
 
+  setSelectedNpcRace(race: string | null): void {
+    const trimmed = race?.trim() ?? '';
+    this.selectedNpcRace = trimmed.length > 0 ? trimmed : null;
+    this.entityPlacer.setSelectedNpcRace(this.selectedNpcRace);
+  }
+
+  getSelectedNpcRace(): string | null {
+    return this.selectedNpcRace;
+  }
+
+  setSelectedNpcSprite(spriteName: string | null): void {
+    const trimmed = spriteName?.trim() ?? '';
+    this.selectedNpcSprite = trimmed.length > 0 ? trimmed : null;
+    this.entityPlacer.setSelectedNpcSprite(this.selectedNpcSprite);
+  }
+
+  getSelectedNpcSprite(): string | null {
+    return this.selectedNpcSprite;
+  }
+
+  setSelectedNpcCharGenSelection(selection: Record<string, string | null> | null): void {
+    this.selectedNpcCharGenSelection = selection ? { ...selection } : null;
+    this.entityPlacer.setSelectedNpcCharGenSelection(this.selectedNpcCharGenSelection);
+  }
+
+  getSelectedNpcCharGenSelection(): Record<string, string | null> | null {
+    return this.selectedNpcCharGenSelection ? { ...this.selectedNpcCharGenSelection } : null;
+  }
+
   setEntitySnapToGrid(enabled: boolean): void {
     this.entityPlacer.setSnapToGrid(enabled);
   }
@@ -637,6 +669,9 @@ export class Editor {
     this.entityPlacer.setActive(this.currentTool === EditorTool.Entity);
     this.entityPlacer.setSelectedEnemySprite(this.selectedEnemySprite);
     this.entityPlacer.setSelectedEnemyAI(this.selectedEnemyAI);
+    this.entityPlacer.setSelectedNpcRace(this.selectedNpcRace);
+    this.entityPlacer.setSelectedNpcSprite(this.selectedNpcSprite);
+    this.entityPlacer.setSelectedNpcCharGenSelection(this.selectedNpcCharGenSelection);
     this.updateGridMetrics();
   }
 
