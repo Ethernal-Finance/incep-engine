@@ -3,6 +3,7 @@ export interface TileLayer {
   data: number[];
   visible: boolean;
   opacity: number;
+  tilesetData?: string[];
 }
 
 export class Tilemap {
@@ -38,7 +39,8 @@ export class Tilemap {
       name,
       data: data || new Array(this.width * this.height).fill(0),
       visible: true,
-      opacity: 1
+      opacity: 1,
+      tilesetData: new Array(this.width * this.height).fill('')
     };
     this.layers.push(layer);
     return layer;
@@ -55,7 +57,7 @@ export class Tilemap {
     return layer.data[y * this.width + x] || 0;
   }
 
-  setTile(layerName: string, x: number, y: number, tileId: number): void {
+  setTile(layerName: string, x: number, y: number, tileId: number, tilesetName?: string | null): void {
     const layer = this.getLayer(layerName);
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Tilemap.ts:58',message:'setTile called',data:{layerName,x,y,tileId,hasLayer:!!layer,width:this.width,height:this.height},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
@@ -64,9 +66,27 @@ export class Tilemap {
     if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
     const index = y * this.width + x;
     layer.data[index] = tileId;
+    if (!layer.tilesetData && (tilesetName || tileId === 0)) {
+      layer.tilesetData = new Array(this.width * this.height).fill('');
+    }
+    if (layer.tilesetData) {
+      if (tileId === 0) {
+        layer.tilesetData[index] = '';
+      } else if (tilesetName) {
+        layer.tilesetData[index] = tilesetName;
+      }
+    }
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/10de58a5-2726-402d-81b3-a13049e4a979',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Tilemap.ts:62',message:'Tile data updated',data:{layerName,x,y,tileId,index,actualValue:layer.data[index]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
     // #endregion
+  }
+
+  getTileTileset(layerName: string, x: number, y: number): string | null {
+    const layer = this.getLayer(layerName);
+    if (!layer || !layer.tilesetData) return null;
+    if (x < 0 || x >= this.width || y < 0 || y >= this.height) return null;
+    const tilesetName = layer.tilesetData[y * this.width + x];
+    return tilesetName ? tilesetName : null;
   }
 
   setCollision(x: number, y: number, hasCollision: boolean): void {
@@ -101,7 +121,19 @@ export class Tilemap {
       data.tilesetColumns,
       data.tilesetRows
     );
-    tilemap.layers = data.layers || [];
+    const rawLayers = data.layers || [];
+    tilemap.layers = rawLayers.map((layer: TileLayer) => {
+      const tilesetData = Array.isArray(layer.tilesetData)
+        ? layer.tilesetData.slice(0, data.width * data.height)
+        : undefined;
+      if (tilesetData && tilesetData.length < data.width * data.height) {
+        tilesetData.push(...new Array(data.width * data.height - tilesetData.length).fill(''));
+      }
+      return {
+        ...layer,
+        tilesetData
+      };
+    });
     tilemap.collisionData = data.collisionData || new Array(data.width * data.height).fill(false);
     return tilemap;
   }

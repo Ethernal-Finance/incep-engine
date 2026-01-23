@@ -157,7 +157,7 @@ export class TileSelector {
     this.loadTileset('default-tileset');
   }
 
-  private loadTileset(tilesetName: string): void {
+  private loadTileset(tilesetName: string, options: { notify?: boolean } = {}): void {
     const tilesetImage = AssetLoader.getImage(tilesetName);
     if (!tilesetImage) {
       this.tilePreview.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">Tileset not found</div>';
@@ -236,7 +236,8 @@ export class TileSelector {
 
     const tilesetChanged = this.currentTilesetInfo?.path !== tilesetName;
     this.currentTilesetInfo = tilesetInfo;
-    if (tilesetChanged && this.onTilesetChanged) {
+    const notify = options.notify !== false;
+    if (notify && tilesetChanged && this.onTilesetChanged) {
       this.onTilesetChanged(tilesetInfo);
     }
   }
@@ -277,6 +278,20 @@ export class TileSelector {
 
   getCurrentTilesetInfo(): TilesetInfo | null {
     return this.currentTilesetInfo;
+  }
+
+  syncTileset(tilesetName: string): void {
+    if (!this.tilesetSelect) return;
+    const resolvedTileset = tilesetName && tilesetName.length > 0 ? tilesetName : 'default-tileset';
+    const existingOption = this.tilesetSelect.querySelector(`option[value="${resolvedTileset}"]`);
+    if (!existingOption) {
+      const option = document.createElement('option');
+      option.value = resolvedTileset;
+      option.textContent = resolvedTileset;
+      this.tilesetSelect.appendChild(option);
+    }
+    this.tilesetSelect.value = resolvedTileset;
+    this.loadTileset(resolvedTileset, { notify: false });
   }
 
   private onPreviewPointerDown(event: PointerEvent): void {

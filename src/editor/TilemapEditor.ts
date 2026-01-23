@@ -11,6 +11,7 @@ import { CollisionSystem } from './CollisionSystem';
 
 export class TilemapEditor {
   private selectedTile: number = 1;
+  private selectedTileset: string;
   private isStretching: boolean = false;
   private stretchStart: Vector2 | null = null;
   private stretchEnd: Vector2 | null = null;
@@ -28,6 +29,7 @@ export class TilemapEditor {
   private lastCollisionEraseCell: Vector2 | null = null;
 
   constructor(private tilemap: Tilemap, undoSystem?: UndoSystem, collisionSystem?: CollisionSystem) {
+    this.selectedTileset = tilemap.tilesetImage || 'default-tileset';
     const defaultLayers = [
       'Pause Menu',
       'Transitions',
@@ -91,6 +93,14 @@ export class TilemapEditor {
     this.paintingTools.getStampManager().setMultiTileStamp(tileIds, width, height);
   }
 
+  setSelectedTileset(tilesetName: string): void {
+    this.selectedTileset = tilesetName || 'default-tileset';
+  }
+
+  getSelectedTileset(): string {
+    return this.selectedTileset;
+  }
+
   getSelectedTile(): number {
     return this.selectedTile;
   }
@@ -130,7 +140,7 @@ export class TilemapEditor {
     };
     
     const setTile = (x: number, y: number, tileId: number): void => {
-      this.tilemap.setTile(activeLayer.name, x, y, tileId);
+      this.tilemap.setTile(activeLayer.name, x, y, tileId, this.selectedTileset);
     };
 
     // Handle Paint/Brush tools
@@ -267,6 +277,10 @@ export class TilemapEditor {
       const pickedTile = this.paintingTools.pickTile(clampedX, clampedY, getTile);
       if (pickedTile > 0) {
         this.setSelectedTile(pickedTile);
+        const pickedTileset = this.tilemap.getTileTileset(activeLayer.name, clampedX, clampedY);
+        if (pickedTileset) {
+          this.setSelectedTileset(pickedTileset);
+        }
       }
     }
     
@@ -409,25 +423,44 @@ export class TilemapEditor {
   }
 
   render(renderer: Renderer): void {
-    const tilesetImage = AssetLoader.getImage(this.tilemap.tilesetImage);
-    if (!tilesetImage) {
-      console.warn(`Tileset image not found: ${this.tilemap.tilesetImage}`);
-      return;
-    }
-
     const tileSize = this.tilemap.tileSize;
-    const tilesPerRow = this.tilemap.tilesetColumns;
+    const tilesetCache = new Map<string, { image: HTMLImageElement; tilesPerRow: number }>();
+    const defaultTilesetName = this.tilemap.tilesetImage || 'default-tileset';
+
+    const getTileset = (tilesetName: string): { image: HTMLImageElement; tilesPerRow: number } | null => {
+      const resolvedName = tilesetName || defaultTilesetName;
+      const cached = tilesetCache.get(resolvedName);
+      if (cached) return cached;
+      const image = AssetLoader.getImage(resolvedName);
+      if (!image) {
+        console.warn(`Tileset image not found: ${resolvedName}`);
+        return null;
+      }
+      let tilesPerRow = this.tilemap.tilesetColumns;
+      if (resolvedName !== this.tilemap.tilesetImage || tilesPerRow <= 0) {
+        tilesPerRow = Math.max(1, Math.floor(image.width / tileSize));
+      }
+      const info = { image, tilesPerRow };
+      tilesetCache.set(resolvedName, info);
+      return info;
+    };
 
     for (const layer of this.tilemap.layers) {
       if (!layer.visible) continue;
 
       for (let y = 0; y < this.tilemap.height; y++) {
         for (let x = 0; x < this.tilemap.width; x++) {
-          const tileId = layer.data[y * this.tilemap.width + x];
+          const index = y * this.tilemap.width + x;
+          const tileId = layer.data[index];
           if (tileId === 0) continue; // Skip empty tiles
 
           const tileX = x * tileSize;
           const tileY = y * tileSize;
+          const tilesetName = layer.tilesetData?.[index] || defaultTilesetName;
+          const tilesetInfo = getTileset(tilesetName);
+          if (!tilesetInfo) continue;
+          const tilesetImage = tilesetInfo.image;
+          const tilesPerRow = tilesetInfo.tilesPerRow;
 
           // Calculate source position in tileset
           const srcX = ((tileId - 1) % tilesPerRow) * tileSize;

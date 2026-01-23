@@ -117,13 +117,15 @@ class EditorApp {
     });
     
     tileSelector.setOnTilesetChanged((info) => {
-      // Update tilemap with new tileset info
+      // Only update the active paint tileset (tiles can mix per map)
       const level = this.editor.getLevel();
-      level.tilemap.tilesetImage = info.path;
-      level.tilemap.tilesetColumns = info.columns;
-      level.tilemap.tilesetRows = info.rows;
-      level.tilemap.tileSize = info.tileSize;
-      this.editor.refreshTilemapMetrics();
+      if (info.tileSize !== level.tilemap.tileSize) {
+        console.warn(
+          `Tileset tileSize (${info.tileSize}) differs from map tileSize (${level.tilemap.tileSize}).` +
+          ' Mixed tile sizes are not supported; painting will use the map tile size.'
+        );
+      }
+      this.editor.getTilemapEditor().setSelectedTileset(info.path);
     });
     
     // Wire tool buttons first
@@ -354,6 +356,7 @@ class EditorApp {
     const levelJson = JSON.parse(tab.data);
     const level = Level.fromJSON(levelJson);
     this.editor.loadLevel(level);
+    this.syncTilesetSelector(level);
 
     const levelNameInput = this.editorUI.getLevelNameInput();
     if (levelNameInput) {
@@ -439,6 +442,12 @@ class EditorApp {
       visible: layer.visible
     }));
     this.editorUI.updateLayerSelect(layers, this.editor.getActiveLayer());
+  }
+
+  private syncTilesetSelector(level: Level): void {
+    const tilesetName = level.tilemap.tilesetImage || 'default-tileset';
+    this.editorUI.getTileSelector().syncTileset(tilesetName);
+    this.editor.getTilemapEditor().setSelectedTileset(tilesetName);
   }
 
   private setupEventListeners(): void {
