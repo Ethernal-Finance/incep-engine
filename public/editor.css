@@ -123,6 +123,41 @@ body {
   gap: 12px;
 }
 
+.top-bar-level-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.level-name-input {
+  background: #3a3a3a;
+  border: 1px solid #4a4a4a;
+  color: #e0e0e0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  width: 160px;
+}
+
+.level-name-input:focus {
+  outline: none;
+  border-color: #5a5a5a;
+}
+
+.btn-small {
+  background: #3a3a3a;
+  border: 1px solid #4a4a4a;
+  color: #e0e0e0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-small:hover {
+  background: #4a4a4a;
+}
+
 .btn-buy {
   background: #ff4444;
   border: none;
@@ -195,6 +230,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.sidebar-section.is-hidden {
+  display: none;
+}
+
+.audio-subsection.is-hidden {
+  display: none;
 }
 
 .tilemap-panel {

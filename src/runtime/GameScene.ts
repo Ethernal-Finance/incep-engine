@@ -40,6 +40,10 @@ export class GameScene extends Scene {
   private colliderToEntity: Map<Collider, Entity> = new Map();
   private entitySoundConfig: Map<string, { collision?: string; interact?: string }> = new Map();
   private activePlayerCollisions: Set<string> = new Set();
+  private enemyBehaviorConfig: Map<string, string> = new Map();
+  private enemyBehaviorState: Map<string, { direction: Vector2; timer: number }> = new Map();
+  private enemyAnimationState: Map<string, { time: number; index: number; row: number }> = new Map();
+  private readonly enemyFrameDuration: number = 0.14;
 
   constructor() {
     super('GameScene');
@@ -72,6 +76,9 @@ export class GameScene extends Scene {
     this.colliderToEntity.clear();
     this.entitySoundConfig.clear();
     this.activePlayerCollisions.clear();
+    this.enemyBehaviorConfig.clear();
+    this.enemyBehaviorState.clear();
+    this.enemyAnimationState.clear();
 
     // Create entities from level data
     for (const levelEntity of level.entities) {
@@ -83,7 +90,36 @@ export class GameScene extends Scene {
           this.playerEntity = entity;
           break;
         case 'enemy':
-          entity = Enemy.create(this.entitySystem, levelEntity.x, levelEntity.y);
+          {
+            const resolveSpriteKey = (raw: string): string => {
+              const trimmed = raw.trim();
+              if (!trimmed) return '';
+              if (trimmed.startsWith('enemy:')) {
+                return trimmed;
+              }
+              const withoutPath = trimmed.split('/').pop() ?? trimmed;
+              const baseName = withoutPath.replace(/\.[^/.]+$/, '');
+              const withPrefix = `enemy:${baseName}`;
+              if (AssetLoader.getImage(withPrefix)) {
+                return withPrefix;
+              }
+              if (AssetLoader.getImage(baseName)) {
+                return baseName;
+              }
+              return trimmed;
+            };
+            const spriteName = typeof levelEntity.properties?.enemySprite === 'string'
+              ? resolveSpriteKey(levelEntity.properties.enemySprite)
+              : '';
+            entity = Enemy.create(
+              this.entitySystem,
+              levelEntity.x,
+              levelEntity.y,
+              'Enemy',
+              50,
+              spriteName.length > 0 ? spriteName : undefined
+            );
+          }
           break;
         case 'npc':
           entity = NPC.create(this.entitySystem, levelEntity.x, levelEntity.y);
@@ -97,6 +133,13 @@ export class GameScene extends Scene {
 
       if (entity) {
         this.registerCollider(entity);
+      }
+
+      if (entity && levelEntity.type === 'enemy') {
+        const behavior = typeof levelEntity.properties?.enemyAI === 'string'
+          ? levelEntity.properties.enemyAI.trim()
+          : '';
+        this.enemyBehaviorConfig.set(entity.id, behavior || 'idle');
       }
 
       // Apply any custom properties
@@ -162,8 +205,10 @@ export class GameScene extends Scene {
     const prevPlayerPos = playerTransform ? playerTransform.position.copy() : null;
 
     // Update systems
+    this.updateEnemyAI(deltaTime);
     this.movementSystem.update(deltaTime);
     this.collisionSystem.update(deltaTime);
+    this.updateEnemyAnimations(deltaTime);
     // AnimationSystem requires animation states array - skip for now as entities don't have animation states yet
     // this.animationSystem.update(deltaTime, []);
     this.combatSystem.update(deltaTime);
@@ -222,6 +267,106 @@ export class GameScene extends Scene {
       }
     }
 
+  }
+
+  private updateEnemyAI(deltaTime: number): void {
+    const enemies = this.entitySystem.getEntitiesWithComponent('movement');
+    const playerTransform = this.playerEntity?.getComponent<Transform>('transform') || null;
+
+    for (const enemy of enemies) {
+      if (enemy.name !== 'Enemy') continue;
+      const movement = enemy.getComponent<any>('movement');
+      const transform = enemy.getComponent<Transform>('transform');
+      if (!movement || !transform) continue;
+
+      const behavior = this.enemyBehaviorConfig.get(enemy.id) || 'idle';
+      const state = this.enemyBehaviorState.get(enemy.id) || {
+        direction: new Vector2(1, 0),
+        timer: 0
+      };
+
+      let desiredDirection = new Vector2(0, 0);
+
+      if (behavior === 'chase-player' && playerTransform) {
+        desiredDirection = Vector2.subtract(playerTransform.position, transform.position);
+      } else if (behavior === 'patrol-horizontal') {
+        state.timer -= deltaTime;
+        if (state.timer <= 0) {
+          state.direction = state.direction.x >= 0 ? new Vector2(-1, 0) : new Vector2(1, 0);
+          state.timer = 1.8;
+        }
+        desiredDirection = state.direction.copy();
+      } else if (behavior === 'patrol-vertical') {
+        state.timer -= deltaTime;
+        if (state.timer <= 0) {
+          state.direction = state.direction.y >= 0 ? new Vector2(0, -1) : new Vector2(0, 1);
+          state.timer = 1.8;
+        }
+        desiredDirection = state.direction.copy();
+      } else if (behavior === 'wander') {
+        state.timer -= deltaTime;
+        if (state.timer <= 0) {
+          const angle = Math.random() * Math.PI * 2;
+          state.direction = new Vector2(Math.cos(angle), Math.sin(angle));
+          state.timer = 1.2 + Math.random() * 1.8;
+        }
+        desiredDirection = state.direction.copy();
+      }
+
+      if (desiredDirection.magnitude() > 0) {
+        this.movementSystem.moveEntity(enemy, desiredDirection, deltaTime);
+      }
+
+      this.enemyBehaviorState.set(enemy.id, state);
+    }
+  }
+
+  private updateEnemyAnimations(deltaTime: number): void {
+    const enemies = this.entitySystem.getEntitiesWithComponent('movement');
+
+    for (const enemy of enemies) {
+      if (enemy.name !== 'Enemy') continue;
+      const movement = enemy.getComponent<any>('movement');
+      const sprite = enemy.getComponent<any>('sprite');
+      if (!movement || !sprite) continue;
+
+      const spriteImage = AssetLoader.getImage(sprite.imageName);
+      if (!spriteImage) continue;
+
+      let frameCount = 1;
+      if (spriteImage.width % 3 === 0 && spriteImage.height % 4 === 0) {
+        sprite.frameWidth = spriteImage.width / 3;
+        sprite.frameHeight = spriteImage.height / 4;
+        frameCount = 3;
+      } else {
+        frameCount = this.getFrameCountForSprite(sprite, spriteImage);
+      }
+
+      const state = this.enemyAnimationState.get(enemy.id) || { time: 0, index: 0, row: 0 };
+      const speed = movement.velocity.magnitude();
+
+      if (speed > 1) {
+        const absX = Math.abs(movement.velocity.x);
+        const absY = Math.abs(movement.velocity.y);
+        if (absX > absY) {
+          state.row = movement.velocity.x < 0 ? 1 : 2;
+        } else {
+          state.row = movement.velocity.y > 0 ? 0 : 3;
+        }
+        state.time += deltaTime;
+        while (state.time >= this.enemyFrameDuration) {
+          state.time -= this.enemyFrameDuration;
+          state.index = (state.index + 1) % frameCount;
+        }
+      } else {
+        state.time = 0;
+        state.index = 0;
+      }
+
+      sprite.frameIndex = state.index;
+      sprite.frameRow = state.row;
+      this.enemyAnimationState.set(enemy.id, state);
+    }
   }
 
   private applyEntitySoundProperties(entity: Entity, properties: Record<string, any>): void {
@@ -557,8 +702,44 @@ export class GameScene extends Scene {
       if (spriteImage) {
         const ctx = renderer.getContext();
         ctx.globalAlpha = sprite.opacity || 1.0;
-        const frameWidth = sprite.frameWidth || sprite.width;
-        const frameHeight = sprite.frameHeight || sprite.height;
+        const baseFrameWidth = sprite.frameWidth || sprite.width;
+        const baseFrameHeight = sprite.frameHeight || sprite.height;
+        const isEnemySprite = typeof sprite.imageName === 'string' && sprite.imageName.startsWith('enemy:');
+        const gridCandidates = [4, 3, 5, 6, 8];
+
+        let frameWidth = baseFrameWidth;
+        let frameHeight = baseFrameHeight;
+        let drawWidth = sprite.width;
+        let drawHeight = sprite.height;
+
+        if (isEnemySprite && spriteImage.width % 3 === 0 && spriteImage.height % 4 === 0) {
+          frameWidth = spriteImage.width / 3;
+          frameHeight = spriteImage.height / 4;
+        } else {
+          const baseFits =
+            spriteImage.width % frameWidth === 0 &&
+            spriteImage.height % frameHeight === 0;
+
+          if (!baseFits && isEnemySprite) {
+            for (const grid of gridCandidates) {
+              if (spriteImage.width % grid === 0 && spriteImage.height % grid === 0) {
+                frameWidth = spriteImage.width / grid;
+                frameHeight = spriteImage.height / grid;
+                break;
+              }
+            }
+          }
+
+          const finalFits =
+            spriteImage.width % frameWidth === 0 &&
+            spriteImage.height % frameHeight === 0;
+          if (!finalFits) {
+            frameWidth = spriteImage.width;
+            frameHeight = spriteImage.height;
+            drawWidth = spriteImage.width;
+            drawHeight = spriteImage.height;
+          }
+        }
         const columns = Math.max(1, Math.floor(spriteImage.width / frameWidth));
         const maxRow = Math.max(0, Math.floor(spriteImage.height / frameHeight) - 1);
         const frameIndex = Math.max(0, Math.min(sprite.frameIndex || 0, columns - 1));
@@ -570,8 +751,8 @@ export class GameScene extends Scene {
           spriteImage,
           x + sprite.offsetX,
           y + sprite.offsetY,
-          sprite.width,
-          sprite.height,
+          drawWidth,
+          drawHeight,
           sx,
           sy,
           frameWidth,
@@ -617,6 +798,8 @@ export class GameScene extends Scene {
     this.colliderToEntity.clear();
     this.entitySoundConfig.clear();
     this.activePlayerCollisions.clear();
+    this.enemyBehaviorConfig.clear();
+    this.enemyBehaviorState.clear();
     AudioManager.stopBackground();
   }
 }

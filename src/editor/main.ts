@@ -2,11 +2,64 @@ import { Editor, EditorTool } from './Editor';
 import { EditorUI } from './UI/EditorUI';
 import { Input } from '../engine/Input';
 import { Time } from '../engine/Time';
-import { Level } from '../data/Level';
+import { Level, LevelEntity } from '../data/Level';
 import { Game } from '../engine/Game';
 import { GameScene } from '../runtime/GameScene';
 import { Vector2 } from '../utils/Vector2';
 import walkSpriteUrl from '../../assets/walk.png';
+
+const enemyAssetImports = import.meta.glob('../../assets/Enemy/*.png', {
+  eager: true,
+  import: 'default'
+}) as Record<string, string>;
+
+const enemyAssetOptions = Object.entries(enemyAssetImports)
+  .map(([path, url]) => {
+    const fileName = path.split('/').pop() ?? 'enemy';
+    const baseName = fileName.replace(/\.[^/.]+$/, '');
+    return {
+      key: `enemy:${baseName}`,
+      label: baseName,
+      url
+    };
+  })
+  .sort((a, b) => a.label.localeCompare(b.label));
+
+const enemyAssetKeyByLabel = new Map(
+  enemyAssetOptions.map((asset) => [asset.label.toLowerCase(), asset.key])
+);
+
+const enemyAssetUrlMap = new Map(enemyAssetOptions.map((asset) => [asset.key, asset.url]));
+
+const normalizeEnemySpriteKey = (raw: string | null | undefined): string | null => {
+  const trimmed = raw?.trim() ?? '';
+  if (!trimmed) return null;
+  const exact = enemyAssetOptions.find((asset) => asset.key === trimmed);
+  if (exact) return exact.key;
+
+  const withoutPath = trimmed.split('/').pop() ?? trimmed;
+  const baseName = withoutPath.replace(/\.[^/.]+$/, '');
+  const lower = baseName.toLowerCase();
+  if (enemyAssetKeyByLabel.has(lower)) {
+    return enemyAssetKeyByLabel.get(lower) ?? null;
+  }
+
+  if (trimmed.startsWith('enemy:')) {
+    const fallback = trimmed.slice('enemy:'.length).trim();
+    const fallbackLower = fallback.toLowerCase();
+    return enemyAssetKeyByLabel.get(fallbackLower) ?? trimmed;
+  }
+
+  return trimmed;
+};
+
+const enemyAIOptions = [
+  { value: 'idle', label: 'Idle' },
+  { value: 'wander', label: 'Wander' },
+  { value: 'patrol-horizontal', label: 'Patrol Horizontal' },
+  { value: 'patrol-vertical', label: 'Patrol Vertical' },
+  { value: 'chase-player', label: 'Chase Player' }
+];
 
 class EditorApp {
   private editor: Editor;
@@ -16,6 +69,10 @@ class EditorApp {
   private runtimeGame: Game | null = null;
   private runtimeScene: GameScene | null = null;
   private lastSelectedEntityId: string | null = null;
+  private enemyAssets = enemyAssetOptions;
+  private openTabs: Map<string, { name: string; data: string }> = new Map();
+  private activeTabId: string | null = null;
+  private nextTabId = 1;
 
   constructor() {
     const container = document.getElementById('editor-container');
@@ -73,6 +130,7 @@ class EditorApp {
     this.editorUI.setOnToolChanged((tool) => {
       console.log(`Tool changed callback triggered: ${tool}`);
       this.editor.setTool(tool);
+      this.updateToolPanelVisibility();
     });
     
     // Set default tool to Paint (this will also update the editor via callback)
@@ -127,6 +185,13 @@ class EditorApp {
         const level = this.editor.getLevel();
         level.name = (e.target as HTMLInputElement).value;
         this.editorUI.updateLayersTitle(level.name);
+        if (this.activeTabId) {
+          this.editorUI.updateTabLabel(this.activeTabId, level.name);
+          const tab = this.openTabs.get(this.activeTabId);
+          if (tab) {
+            tab.name = level.name;
+          }
+        }
       });
     }
 
@@ -170,6 +235,7 @@ class EditorApp {
             this.downloadLevel(levelName, levelData);
           }
           this.registerLevel(levelName, levelData);
+          this.persistActiveTab();
           alert(`Level "${levelName}" saved to JSON.`);
         } catch (error) {
           console.error('Failed to save level:', error);
@@ -186,8 +252,48 @@ class EditorApp {
       });
     }
     
+    this.setupTabs();
+    this.updateToolPanelVisibility();
     this.setupEventListeners();
     this.start();
+  }
+
+  private updateToolPanelVisibility(): void {
+    const tool = this.editor.getTool();
+    const entityPanel = this.editorUI.getEntityPanel();
+    const audioPanel = this.editorUI.getEntityAudioPanel();
+    const entityAudioSubsection = this.editorUI.getEntityAudioSubsection();
+    const backgroundAudioSubsection = this.editorUI.getBackgroundAudioSubsection();
+    const tilemapPanel = this.editorUI.getTilemapPanel();
+
+    const isEntityTool = tool === EditorTool.Entity;
+    const isBackgroundAudioTool = tool === EditorTool.BackgroundAudio;
+    const isTileTool = [
+      EditorTool.Paint,
+      EditorTool.Erase,
+      EditorTool.Collision,
+      EditorTool.Brush,
+      EditorTool.FloodFill,
+      EditorTool.Line,
+      EditorTool.Rectangle,
+      EditorTool.Eyedropper
+    ].includes(tool);
+
+    if (entityPanel) {
+      entityPanel.classList.toggle('is-hidden', !isEntityTool);
+    }
+    if (tilemapPanel) {
+      tilemapPanel.classList.toggle('is-hidden', !isTileTool);
+    }
+    if (audioPanel) {
+      audioPanel.classList.toggle('is-hidden', !isEntityTool && !isBackgroundAudioTool);
+    }
+    if (entityAudioSubsection) {
+      entityAudioSubsection.classList.toggle('is-hidden', !isEntityTool);
+    }
+    if (backgroundAudioSubsection) {
+      backgroundAudioSubsection.classList.toggle('is-hidden', !isBackgroundAudioTool);
+    }
   }
 
   private loadLevelFromFile(): void {
@@ -202,20 +308,9 @@ class EditorApp {
       reader.onload = () => {
         try {
           const levelJson = JSON.parse(String(reader.result || ''));
-          const level = Level.fromJSON(levelJson);
-          this.editor.loadLevel(level);
-
-          const levelNameInput = this.editorUI.getLevelNameInput();
-          if (levelNameInput) {
-            levelNameInput.value = level.name;
-          }
-          this.editorUI.updateLayersTitle(level.name);
-          this.updateLayerSelector();
-          this.syncAudioPanel();
-
           const levelData = JSON.stringify(levelJson, null, 2);
-          this.registerLevel(level.name, levelData);
-          alert(`Level "${level.name}" loaded successfully!`);
+          this.openTabFromData(levelData, true);
+          alert(`Level "${levelJson.name || 'Untitled Level'}" loaded successfully!`);
         } catch (error) {
           console.error('Failed to load level:', error);
           alert('Failed to load level. Check console for details.');
@@ -224,6 +319,79 @@ class EditorApp {
       reader.readAsText(file);
     };
     input.click();
+  }
+
+  private setupTabs(): void {
+    const levelData = this.editor.saveLevel();
+    this.openTabFromData(levelData, true);
+    this.editorUI.setOnTabSelected((tabId) => this.activateTab(tabId));
+    this.editorUI.setOnTabClosed((tabId) => this.closeTab(tabId));
+  }
+
+  private openTabFromData(levelData: string, makeActive: boolean): void {
+    const tabId = `tab_${this.nextTabId++}`;
+    let level: Level;
+    try {
+      const levelJson = JSON.parse(levelData);
+      level = Level.fromJSON(levelJson);
+    } catch {
+      level = new Level('Untitled Level');
+      levelData = this.editor.saveLevel();
+    }
+    this.openTabs.set(tabId, { name: level.name, data: levelData });
+    this.editorUI.addTab(level.name || 'Untitled', tabId, makeActive);
+    if (makeActive) {
+      this.activateTab(tabId);
+    }
+  }
+
+  private activateTab(tabId: string): void {
+    if (this.activeTabId === tabId) return;
+    this.persistActiveTab();
+
+    const tab = this.openTabs.get(tabId);
+    if (!tab) return;
+    const levelJson = JSON.parse(tab.data);
+    const level = Level.fromJSON(levelJson);
+    this.editor.loadLevel(level);
+
+    const levelNameInput = this.editorUI.getLevelNameInput();
+    if (levelNameInput) {
+      levelNameInput.value = level.name;
+    }
+    this.editorUI.updateLayersTitle(level.name);
+    this.updateLayerSelector();
+    this.syncAudioPanel();
+    this.syncEntityPanel();
+
+    this.activeTabId = tabId;
+    this.editorUI.setActiveTab(tabId);
+  }
+
+  private closeTab(tabId: string): void {
+    if (!this.openTabs.has(tabId)) return;
+    if (this.openTabs.size === 1) {
+      return;
+    }
+    const isActive = this.activeTabId === tabId;
+    this.openTabs.delete(tabId);
+    this.editorUI.removeTab(tabId);
+    if (isActive) {
+      const nextTabId = this.openTabs.keys().next().value as string | undefined;
+      if (nextTabId) {
+        this.activateTab(nextTabId);
+      }
+    }
+  }
+
+  private persistActiveTab(): void {
+    if (!this.activeTabId) return;
+    const tab = this.openTabs.get(this.activeTabId);
+    if (!tab) return;
+    const level = this.editor.getLevel();
+    tab.name = level.name;
+    tab.data = this.editor.saveLevel();
+    this.editorUI.updateTabLabel(this.activeTabId, level.name || 'Untitled');
   }
 
   private downloadLevel(levelName: string, levelData: string): void {
@@ -313,6 +481,8 @@ class EditorApp {
         this.editorUI.setTool(EditorTool.Spawn);
       } else if (e.key === '7') {
         this.editorUI.setTool(EditorTool.Door);
+      } else if (e.key === '8') {
+        this.editorUI.setTool(EditorTool.BackgroundAudio);
       }
       
       // Undo/Redo
@@ -480,6 +650,31 @@ class EditorApp {
       }
     }
 
+    const enemySpriteKeys = new Set<string>();
+    for (const entity of level.entities) {
+      if (entity.type !== 'enemy') continue;
+      const spriteKey = normalizeEnemySpriteKey(
+        typeof entity.properties?.enemySprite === 'string'
+          ? entity.properties.enemySprite
+          : ''
+      );
+      if (spriteKey) {
+        enemySpriteKeys.add(spriteKey);
+      }
+    }
+
+    for (const spriteKey of enemySpriteKeys) {
+      if (!AssetLoader.getImage(spriteKey)) {
+        const url = enemyAssetUrlMap.get(spriteKey);
+        if (url) {
+          assetsToLoad.push({
+            path: url,
+            name: spriteKey
+          });
+        }
+      }
+    }
+
     if (!AssetLoader.getImage('walk')) {
       assetsToLoad.push({
         path: walkSpriteUrl,
@@ -596,15 +791,31 @@ class EditorApp {
     const typeSelect = this.editorUI.getEntityTypeSelect();
     const customInput = this.editorUI.getEntityCustomTypeInput();
     const snapToggle = this.editorUI.getEntitySnapToggle();
+    const enemySelect = this.editorUI.getEnemyAssetSelect();
+    const enemyAISelect = this.editorUI.getEnemyAISelect();
 
     const syncType = () => {
       const nextType = this.getSelectedEntityTypeFromUI();
       this.editor.setSelectedEntityType(nextType);
+      this.updateEnemyControlsVisibility(nextType);
       if (customInput && typeSelect) {
         const isCustom = typeSelect.value === 'custom';
         customInput.disabled = !isCustom;
         if (!isCustom) {
           customInput.value = '';
+        }
+      }
+      if (nextType === 'enemy') {
+        const selectedSprite = this.getSelectedEnemySpriteFromUI();
+        this.editor.setSelectedEnemySprite(selectedSprite);
+        const selectedEntity = this.editor.getSelectedEntity();
+        if (selectedEntity && selectedEntity.type === 'enemy') {
+          this.applyEnemySpriteToEntity(selectedEntity, selectedSprite);
+        }
+        const selectedAI = this.getSelectedEnemyAIFromUI();
+        this.editor.setSelectedEnemyAI(selectedAI);
+        if (selectedEntity && selectedEntity.type === 'enemy') {
+          this.applyEnemyAIToEntity(selectedEntity, selectedAI);
         }
       }
     };
@@ -628,6 +839,30 @@ class EditorApp {
       snapToggle.checked = this.editor.getEntitySnapToGrid();
     }
 
+    if (enemySelect) {
+      this.populateEnemyAssetSelect(enemySelect);
+      enemySelect.addEventListener('change', () => {
+        const selectedSprite = this.getSelectedEnemySpriteFromUI();
+        this.editor.setSelectedEnemySprite(selectedSprite);
+        const selectedEntity = this.editor.getSelectedEntity();
+        if (selectedEntity && selectedEntity.type === 'enemy') {
+          this.applyEnemySpriteToEntity(selectedEntity, selectedSprite);
+        }
+      });
+    }
+
+    if (enemyAISelect) {
+      this.populateEnemyAISelect(enemyAISelect);
+      enemyAISelect.addEventListener('change', () => {
+        const selectedAI = this.getSelectedEnemyAIFromUI();
+        this.editor.setSelectedEnemyAI(selectedAI);
+        const selectedEntity = this.editor.getSelectedEntity();
+        if (selectedEntity && selectedEntity.type === 'enemy') {
+          this.applyEnemyAIToEntity(selectedEntity, selectedAI);
+        }
+      });
+    }
+
     syncType();
   }
 
@@ -646,10 +881,102 @@ class EditorApp {
     return typeSelect.value;
   }
 
+  private getSelectedEnemySpriteFromUI(): string | null {
+    const enemySelect = this.editorUI.getEnemyAssetSelect();
+    if (!enemySelect) {
+      return this.editor.getSelectedEnemySprite();
+    }
+    const value = enemySelect.value.trim();
+    return normalizeEnemySpriteKey(value.length > 0 ? value : null);
+  }
+
+  private populateEnemyAssetSelect(select: HTMLSelectElement): void {
+    select.innerHTML = '';
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Default';
+    select.appendChild(defaultOption);
+
+    this.enemyAssets.forEach((asset) => {
+      const option = document.createElement('option');
+      option.value = asset.key;
+      option.textContent = asset.label;
+      select.appendChild(option);
+    });
+  }
+
+  private getSelectedEnemyAIFromUI(): string | null {
+    const enemyAISelect = this.editorUI.getEnemyAISelect();
+    if (!enemyAISelect) {
+      return this.editor.getSelectedEnemyAI();
+    }
+    const value = enemyAISelect.value.trim();
+    return value.length > 0 ? value : null;
+  }
+
+  private populateEnemyAISelect(select: HTMLSelectElement): void {
+    select.innerHTML = '';
+    enemyAIOptions.forEach((option) => {
+      const element = document.createElement('option');
+      element.value = option.value;
+      element.textContent = option.label;
+      select.appendChild(element);
+    });
+  }
+
+  private updateEnemyControlsVisibility(activeType: string): void {
+    const assetRow = this.editorUI.getEnemyAssetRow();
+    if (assetRow) {
+      assetRow.hidden = activeType !== 'enemy';
+    }
+    const aiRow = this.editorUI.getEnemyAIRow();
+    if (aiRow) {
+      aiRow.hidden = activeType !== 'enemy';
+    }
+  }
+
+  private applyEnemyAIToEntity(entity: LevelEntity, mode: string | null): void {
+    if (!entity) return;
+    const trimmed = mode?.trim() ?? '';
+    if (!trimmed) {
+      if (entity.properties && 'enemyAI' in entity.properties) {
+        delete entity.properties.enemyAI;
+        if (Object.keys(entity.properties).length === 0) {
+          delete entity.properties;
+        }
+      }
+      return;
+    }
+    if (!entity.properties) {
+      entity.properties = {};
+    }
+    entity.properties.enemyAI = trimmed;
+  }
+
+  private applyEnemySpriteToEntity(entity: LevelEntity, spriteKey: string | null): void {
+    if (!entity) return;
+    const normalized = normalizeEnemySpriteKey(spriteKey);
+    if (!normalized) {
+      if (entity.properties && 'enemySprite' in entity.properties) {
+        delete entity.properties.enemySprite;
+        if (Object.keys(entity.properties).length === 0) {
+          delete entity.properties;
+        }
+      }
+      return;
+    }
+    if (!entity.properties) {
+      entity.properties = {};
+    }
+    entity.properties.enemySprite = normalized;
+  }
+
   private syncEntityPanel(): void {
     const typeSelect = this.editorUI.getEntityTypeSelect();
     const customInput = this.editorUI.getEntityCustomTypeInput();
     const snapToggle = this.editorUI.getEntitySnapToggle();
+    const enemySelect = this.editorUI.getEnemyAssetSelect();
+    const enemyAISelect = this.editorUI.getEnemyAISelect();
     if (!typeSelect || !customInput || !snapToggle) return;
 
     const selectedEntity = this.editor.getSelectedEntity();
@@ -678,6 +1005,47 @@ class EditorApp {
         }
         if (customInput.value !== activeType) {
           customInput.value = activeType;
+        }
+      }
+    }
+
+    this.updateEnemyControlsVisibility(activeType);
+
+    if (enemySelect) {
+      const isEditingEnemy = activeElement === enemySelect;
+      if (!isEditingEnemy) {
+        const rawSprite = typeof selectedEntity?.properties?.enemySprite === 'string'
+          ? selectedEntity.properties.enemySprite
+          : this.editor.getSelectedEnemySprite();
+        const normalizedKey = normalizeEnemySpriteKey(rawSprite);
+        const desiredValue = normalizedKey ?? '';
+        if (enemySelect.value !== desiredValue) {
+          enemySelect.value = desiredValue;
+        }
+        if (this.editor.getSelectedEnemySprite() !== normalizedKey) {
+          this.editor.setSelectedEnemySprite(normalizedKey);
+        }
+        if (selectedEntity && selectedEntity.type === 'enemy') {
+          this.applyEnemySpriteToEntity(selectedEntity, normalizedKey);
+        }
+      }
+    }
+
+    if (enemyAISelect) {
+      const isEditingAI = activeElement === enemyAISelect;
+      if (!isEditingAI) {
+        const desiredAI = typeof selectedEntity?.properties?.enemyAI === 'string'
+          ? selectedEntity.properties.enemyAI
+          : this.editor.getSelectedEnemyAI();
+        const normalized = desiredAI?.trim() ?? '';
+        if (enemyAISelect.value !== normalized) {
+          enemyAISelect.value = normalized;
+        }
+        if (this.editor.getSelectedEnemyAI() !== (normalized.length > 0 ? normalized : null)) {
+          this.editor.setSelectedEnemyAI(normalized.length > 0 ? normalized : null);
+        }
+        if (selectedEntity && selectedEntity.type === 'enemy') {
+          this.applyEnemyAIToEntity(selectedEntity, normalized.length > 0 ? normalized : null);
         }
       }
     }

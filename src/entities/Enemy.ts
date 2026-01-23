@@ -11,13 +11,14 @@ export class Enemy {
     x: number,
     y: number,
     name: string = 'Enemy',
-    health: number = 50
+    health: number = 50,
+    spriteName?: string
   ): Entity {
     const enemy = entitySystem.createEntity(name);
 
     enemy.addComponent('transform', new Transform(x, y));
-    enemy.addComponent('sprite', new Sprite('enemy', 32, 32));
-    enemy.addComponent('collider', new Collider(0, 0, 28, 28, CollisionLayer.Enemy, false));
+    enemy.addComponent('sprite', new Sprite(spriteName ?? 'enemy', 40, 40));
+    enemy.addComponent('collider', new Collider(2, 4, 32, 32, CollisionLayer.Enemy, false));
     enemy.addComponent('movement', new Movement(80, 120, 400, 0.9));
     enemy.addComponent('health', new Health(health));
 

@@ -20,6 +20,7 @@ export class Level {
   public tilemap: Tilemap;
   public entities: LevelEntity[];
   public spawnPoint: { x: number; y: number } | null;
+  public backgroundSoundPoint: { x: number; y: number } | null;
   public doors: LevelDoor[];
   public backgroundSound: string | null;
 
@@ -30,6 +31,7 @@ export class Level {
     this.tilemap = new Tilemap(50, 50, 32);
     this.entities = [];
     this.spawnPoint = null;
+    this.backgroundSoundPoint = null;
     this.doors = [];
     this.backgroundSound = null;
   }
@@ -68,6 +70,7 @@ export class Level {
       tilemap: this.tilemap.toJSON(),
       entities: this.entities,
       spawnPoint: this.spawnPoint,
+      backgroundSoundPoint: this.backgroundSoundPoint,
       doors,
       backgroundSound: this.backgroundSound
     };
@@ -78,6 +81,7 @@ export class Level {
     level.tilemap = Tilemap.fromJSON(data.tilemap);
     level.entities = data.entities || [];
     level.spawnPoint = data.spawnPoint || null;
+    level.backgroundSoundPoint = data.backgroundSoundPoint || null;
     level.doors = data.doors || [];
     level.backgroundSound = data.backgroundSound || null;
     return level;

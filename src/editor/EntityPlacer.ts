@@ -14,9 +14,11 @@ export class EntityPlacer {
   private snapToGrid: boolean = true;
   private isActive: boolean = false;
   private previewPosition: Vector2 | null = null;
+  private selectedEnemySprite: string | null = null;
+  private selectedEnemyAI: string | null = null;
   private readonly typeSizeMultipliers: Record<string, number> = {
     player: 1,
-    enemy: 0.9,
+    enemy: 1.1,
     npc: 0.85,
     item: 0.6
   };
@@ -36,6 +38,24 @@ export class EntityPlacer {
     if (!this.selectedEntity) return;
     const trimmed = type.trim();
     this.selectedEntity.type = trimmed.length > 0 ? trimmed : 'entity';
+  }
+
+  setSelectedEnemySprite(spriteName: string | null): void {
+    const trimmed = spriteName?.trim() ?? '';
+    this.selectedEnemySprite = trimmed.length > 0 ? trimmed : null;
+  }
+
+  getSelectedEnemySprite(): string | null {
+    return this.selectedEnemySprite;
+  }
+
+  setSelectedEnemyAI(mode: string | null): void {
+    const trimmed = mode?.trim() ?? '';
+    this.selectedEnemyAI = trimmed.length > 0 ? trimmed : null;
+  }
+
+  getSelectedEnemyAI(): string | null {
+    return this.selectedEnemyAI;
   }
 
   setSnapToGrid(enabled: boolean): void {
@@ -183,11 +203,22 @@ export class EntityPlacer {
   }
 
   private createEntity(pos: Vector2, type: string): LevelEntity {
+    const properties: Record<string, any> = {};
+    if (type === 'enemy') {
+      if (this.selectedEnemySprite) {
+        properties.enemySprite = this.selectedEnemySprite;
+      }
+      if (this.selectedEnemyAI) {
+        properties.enemyAI = this.selectedEnemyAI;
+      }
+    }
+    const hasProperties = Object.keys(properties).length > 0;
     return {
       type,
       id: `entity_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       x: pos.x,
-      y: pos.y
+      y: pos.y,
+      properties: hasProperties ? properties : undefined
     };
   }
 

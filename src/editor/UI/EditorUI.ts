@@ -13,6 +13,8 @@ export class EditorUI {
   private onToolChanged?: (tool: EditorTool) => void;
   private onLayerSelected?: (layerIndex: number) => void;
   private onLayerVisibilityChanged?: (layerIndex: number, visible: boolean) => void;
+  private onTabSelected?: (tabId: string) => void;
+  private onTabClosed?: (tabId: string) => void;
   private readonly minSidebarWidth = 200;
   private readonly maxSidebarWidth = 520;
 
@@ -37,7 +39,13 @@ export class EditorUI {
         </div>
         <div class="tabs-container" id="tabs-container"></div>
       </div>
-      <div class="top-bar-right"></div>
+      <div class="top-bar-right">
+        <div class="top-bar-level-controls">
+          <input type="text" class="level-name-input" id="level-name-input" placeholder="Level name" value="Layout 1">
+          <button class="btn-small" id="btn-save">Save</button>
+          <button class="btn-small" id="btn-load">Load</button>
+        </div>
+      </div>
     `;
 
     // Canvas container
@@ -115,9 +123,19 @@ export class EditorUI {
             </span>
             <span class="tool-label">Door</span>
           </button>
+          <button class="tool-btn" id="tool-background-audio" title="Background Audio (8)">
+            <span class="tool-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20">
+                <path d="M4 8v4h3l4 3V5L7 8H4z"></path>
+                <path d="M14 8c1 .7 1 2.3 0 3"></path>
+                <path d="M16 6c2 1.6 2 6.4 0 8"></path>
+              </svg>
+            </span>
+            <span class="tool-label">BG Audio</span>
+          </button>
         </div>
       </div>
-      <div class="sidebar-section entity-panel">
+      <div class="sidebar-section entity-panel" id="entity-panel">
         <h3>Entity</h3>
         <label class="field-label" for="entity-type-select">Type</label>
         <select class="select-input" id="entity-type-select">
@@ -128,25 +146,27 @@ export class EditorUI {
           <option value="custom">Custom</option>
         </select>
         <input type="text" class="search-input" id="entity-type-custom" placeholder="Custom type name" disabled>
+        <div class="enemy-asset-row" id="enemy-asset-row" hidden>
+          <label class="field-label" for="enemy-asset-select">Enemy</label>
+          <select class="select-input" id="enemy-asset-select"></select>
+        </div>
+        <div class="enemy-ai-row" id="enemy-ai-row" hidden>
+          <label class="field-label" for="enemy-ai-select">Enemy AI</label>
+          <select class="select-input" id="enemy-ai-select"></select>
+        </div>
         <label class="toggle-row" for="entity-snap-grid">
           <input type="checkbox" id="entity-snap-grid" checked>
           <span>Snap to grid</span>
         </label>
         <div class="entity-hint">Alt + drag to duplicate. Delete to remove.</div>
       </div>
-      <div class="sidebar-section">
-        <h3>Level</h3>
-        <input type="text" class="level-name-input" id="level-name-input" placeholder="Level name" value="Layout 1">
-        <div class="level-buttons">
-          <button class="btn-small" id="btn-save">Save</button>
-          <button class="btn-small" id="btn-load">Load</button>
-        </div>
-      </div>
-      <div class="sidebar-section">
+      <div class="sidebar-section" id="entity-audio-panel">
         <h3>Audio</h3>
-        <label class="field-label" for="level-bg-sound">Background</label>
-        <input type="text" class="search-input" id="level-bg-sound" placeholder="e.g. ambience.mp3">
-        <div class="audio-subsection">
+        <div class="audio-subsection" id="level-audio-subsection">
+          <label class="field-label" for="level-bg-sound">Background</label>
+          <input type="text" class="search-input" id="level-bg-sound" placeholder="e.g. ambience.mp3">
+        </div>
+        <div class="audio-subsection" id="entity-audio-subsection">
           <div class="audio-subtitle">Selected entity</div>
           <label class="field-label" for="entity-sound-collision">On collision</label>
           <input type="text" class="search-input" id="entity-sound-collision" placeholder="e.g. hit.wav">
@@ -210,7 +230,6 @@ export class EditorUI {
 
     // Initialize tabs
     this.tabs = document.getElementById('tabs-container')!;
-    this.addTab('Layout 1', true);
 
     // Initialize tile selector
     this.tileSelector = new TileSelector(this.sidebar);
@@ -271,6 +290,7 @@ export class EditorUI {
     const collisionBtn = document.getElementById('tool-collision') as HTMLButtonElement;
     const spawnBtn = document.getElementById('tool-spawn') as HTMLButtonElement;
     const doorBtn = document.getElementById('tool-door') as HTMLButtonElement;
+    const backgroundAudioBtn = document.getElementById('tool-background-audio') as HTMLButtonElement;
 
     if (selectBtn) {
       this.toolButtons.set(EditorTool.Select, selectBtn);
@@ -299,6 +319,10 @@ export class EditorUI {
     if (doorBtn) {
       this.toolButtons.set(EditorTool.Door, doorBtn);
       doorBtn.addEventListener('click', () => this.setTool(EditorTool.Door));
+    }
+    if (backgroundAudioBtn) {
+      this.toolButtons.set(EditorTool.BackgroundAudio, backgroundAudioBtn);
+      backgroundAudioBtn.addEventListener('click', () => this.setTool(EditorTool.BackgroundAudio));
     }
   }
 
@@ -383,6 +407,42 @@ export class EditorUI {
 
   getEntityCustomTypeInput(): HTMLInputElement | null {
     return document.getElementById('entity-type-custom') as HTMLInputElement;
+  }
+
+  getEnemyAssetSelect(): HTMLSelectElement | null {
+    return document.getElementById('enemy-asset-select') as HTMLSelectElement;
+  }
+
+  getEnemyAssetRow(): HTMLElement | null {
+    return document.getElementById('enemy-asset-row');
+  }
+
+  getEnemyAISelect(): HTMLSelectElement | null {
+    return document.getElementById('enemy-ai-select') as HTMLSelectElement;
+  }
+
+  getEnemyAIRow(): HTMLElement | null {
+    return document.getElementById('enemy-ai-row');
+  }
+
+  getEntityPanel(): HTMLElement | null {
+    return document.getElementById('entity-panel');
+  }
+
+  getEntityAudioPanel(): HTMLElement | null {
+    return document.getElementById('entity-audio-panel');
+  }
+
+  getBackgroundAudioSubsection(): HTMLElement | null {
+    return document.getElementById('level-audio-subsection');
+  }
+
+  getTilemapPanel(): HTMLElement | null {
+    return this.sidebar.querySelector('.tilemap-panel');
+  }
+
+  getEntityAudioSubsection(): HTMLElement | null {
+    return document.getElementById('entity-audio-subsection');
   }
 
   getEntitySnapToggle(): HTMLInputElement | null {
@@ -474,14 +534,60 @@ export class EditorUI {
     }
   }
 
-  addTab(name: string, active: boolean = false): void {
+  addTab(name: string, tabId: string, active: boolean = false): void {
     const tab = document.createElement('div');
     tab.className = `tab ${active ? 'active' : ''}`;
+    tab.dataset.tabId = tabId;
     tab.innerHTML = `
       <span>${name}</span>
       <button class="tab-close">×</button>
     `;
+    const closeBtn = tab.querySelector('.tab-close') as HTMLButtonElement | null;
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (this.onTabClosed) {
+          this.onTabClosed(tabId);
+        }
+      });
+    }
+    tab.addEventListener('click', () => {
+      if (this.onTabSelected) {
+        this.onTabSelected(tabId);
+      }
+    });
     this.tabs.appendChild(tab);
+  }
+
+  setActiveTab(tabId: string): void {
+    const tabs = Array.from(this.tabs.querySelectorAll<HTMLElement>('.tab'));
+    tabs.forEach((tab) => {
+      tab.classList.toggle('active', tab.dataset.tabId === tabId);
+    });
+  }
+
+  updateTabLabel(tabId: string, name: string): void {
+    const tab = this.tabs.querySelector<HTMLElement>(`.tab[data-tab-id="${tabId}"]`);
+    if (!tab) return;
+    const label = tab.querySelector('span');
+    if (label) {
+      label.textContent = name;
+    }
+  }
+
+  removeTab(tabId: string): void {
+    const tab = this.tabs.querySelector<HTMLElement>(`.tab[data-tab-id="${tabId}"]`);
+    if (tab && tab.parentElement) {
+      tab.parentElement.removeChild(tab);
+    }
+  }
+
+  setOnTabSelected(callback: (tabId: string) => void): void {
+    this.onTabSelected = callback;
+  }
+
+  setOnTabClosed(callback: (tabId: string) => void): void {
+    this.onTabClosed = callback;
   }
 
   updateMousePosition(x: number, y: number): void {

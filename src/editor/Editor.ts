@@ -28,7 +28,8 @@ export enum EditorTool {
   Entity = 'entity',
   Collision = 'collision',
   Spawn = 'spawn',
-  Door = 'door'
+  Door = 'door',
+  BackgroundAudio = 'background-audio'
 }
 
 export class Editor {
@@ -59,6 +60,8 @@ export class Editor {
   private paintingTools: PaintingTools;
   private undoSystem: UndoSystem;
   private collisionSystem: CollisionSystem;
+  private selectedEnemySprite: string | null = null;
+  private selectedEnemyAI: string | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.game = new Game(canvas);
@@ -199,14 +202,14 @@ export class Editor {
     this.camera.zoom = this.zoom;
 
     // Handle panning (middle mouse or space + drag)
-    if (Input.getMouseButton(2) || (Input.getKey(' ') && mouseButton)) {
+    if (Input.getMouseButton(1) || (Input.getKey(' ') && mouseButton)) {
       if (Input.getKey(' ') && mouseButton) {
         // Space + drag panning
         if (!this.viewControls.isSpacePanning()) {
           this.viewControls.startSpacePan(this.mousePosition);
         }
         this.gridOffset = this.viewControls.updateSpacePan(this.mousePosition, this.gridOffset, this.zoom);
-      } else if (Input.getMouseButton(2)) {
+      } else if (Input.getMouseButton(1)) {
         // Middle mouse button
         if (!this.panning) {
           this.panning = true;
@@ -281,6 +284,18 @@ export class Editor {
         const clampedX = Math.max(0, Math.min(this.currentLevel.tilemap.width - 1, tileX));
         const clampedY = Math.max(0, Math.min(this.currentLevel.tilemap.height - 1, tileY));
         this.currentLevel.spawnPoint = {
+          x: clampedX * tileSize,
+          y: clampedY * tileSize
+        };
+      }
+    } else if (this.currentTool === EditorTool.BackgroundAudio) {
+      if (mouseButtonDown) {
+        const tileSize = this.currentLevel.tilemap.tileSize;
+        const tileX = Math.floor(worldPos.x / tileSize);
+        const tileY = Math.floor(worldPos.y / tileSize);
+        const clampedX = Math.max(0, Math.min(this.currentLevel.tilemap.width - 1, tileX));
+        const clampedY = Math.max(0, Math.min(this.currentLevel.tilemap.height - 1, tileY));
+        this.currentLevel.backgroundSoundPoint = {
           x: clampedX * tileSize,
           y: clampedY * tileSize
         };
@@ -393,6 +408,29 @@ export class Editor {
       ctx.lineTo(this.currentLevel.spawnPoint.x + tileSize, this.currentLevel.spawnPoint.y + tileSize);
       ctx.moveTo(this.currentLevel.spawnPoint.x + tileSize, this.currentLevel.spawnPoint.y);
       ctx.lineTo(this.currentLevel.spawnPoint.x, this.currentLevel.spawnPoint.y + tileSize);
+      ctx.stroke();
+    }
+
+    // Render background audio marker
+    if (this.currentLevel.backgroundSoundPoint) {
+      const tileSize = this.currentLevel.tilemap.tileSize;
+      const ctx = this.renderer.getContext();
+      const markerX = this.currentLevel.backgroundSoundPoint.x;
+      const markerY = this.currentLevel.backgroundSoundPoint.y;
+      const centerX = markerX + tileSize / 2;
+      const centerY = markerY + tileSize / 2;
+      const radius = tileSize * 0.35;
+      ctx.strokeStyle = '#7dd3fc';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(centerX - radius * 0.3, centerY - radius * 0.4);
+      ctx.lineTo(centerX - radius * 0.3, centerY + radius * 0.4);
+      ctx.lineTo(centerX + radius * 0.35, centerY + radius * 0.15);
+      ctx.lineTo(centerX + radius * 0.35, centerY - radius * 0.15);
+      ctx.closePath();
       ctx.stroke();
     }
 
@@ -564,6 +602,26 @@ export class Editor {
     this.entityPlacer.applyTypeToSelectedEntity(type);
   }
 
+  setSelectedEnemySprite(spriteName: string | null): void {
+    const trimmed = spriteName?.trim() ?? '';
+    this.selectedEnemySprite = trimmed.length > 0 ? trimmed : null;
+    this.entityPlacer.setSelectedEnemySprite(this.selectedEnemySprite);
+  }
+
+  getSelectedEnemySprite(): string | null {
+    return this.selectedEnemySprite;
+  }
+
+  setSelectedEnemyAI(mode: string | null): void {
+    const trimmed = mode?.trim() ?? '';
+    this.selectedEnemyAI = trimmed.length > 0 ? trimmed : null;
+    this.entityPlacer.setSelectedEnemyAI(this.selectedEnemyAI);
+  }
+
+  getSelectedEnemyAI(): string | null {
+    return this.selectedEnemyAI;
+  }
+
   setEntitySnapToGrid(enabled: boolean): void {
     this.entityPlacer.setSnapToGrid(enabled);
   }
@@ -577,6 +635,8 @@ export class Editor {
     this.tilemapEditor = new TilemapEditor(level.tilemap, this.undoSystem, this.collisionSystem);
     this.entityPlacer = new EntityPlacer(level);
     this.entityPlacer.setActive(this.currentTool === EditorTool.Entity);
+    this.entityPlacer.setSelectedEnemySprite(this.selectedEnemySprite);
+    this.entityPlacer.setSelectedEnemyAI(this.selectedEnemyAI);
     this.updateGridMetrics();
   }
 
